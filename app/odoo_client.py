@@ -139,6 +139,18 @@ class OdooClient:
             for r in rows
         ]
 
+    def fetch_ids_with_hours(self, field: str, ids: list[int]) -> set[int]:
+        """Subset of `ids` that have at least one account.analytic.line where
+        `field` ('task_id' or 'helpdesk_ticket_id') points to them — used to
+        filter the picker down to tasks/tickets nobody has logged time on yet."""
+        if not ids:
+            return set()
+        rows = self._execute_kw(
+            "account.analytic.line", "read_group",
+            [[(field, "in", ids)], [field], [field]],
+        )
+        return {r[field][0] for r in rows if r.get(field)}
+
     # ---- type_analytic_line_id capability probe -------------------------
 
     def probe_type_analytic_line_field(self) -> FieldCapability:

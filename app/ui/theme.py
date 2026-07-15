@@ -6,6 +6,7 @@ from PySide6.QtWidgets import QApplication, QWidget
 _LIGHT = dict(
     bg="#f3f5f8", surface="#ffffff", border="#d7dbe2", text="#1f2430", text_muted="#6b7280",
     primary="#2f6fed", primary_hover="#2558c4", primary_pressed="#1d47a3", on_primary="#ffffff",
+    accent="#06b6d4",
     danger="#c62828", disabled_bg="#f0f1f3", disabled_fg="#a8adb5",
     state_draft="#6b7280", state_pending="#2f6fed", state_synced="#1f8a4c", state_error="#c62828",
 )
@@ -13,6 +14,7 @@ _LIGHT = dict(
 _DARK = dict(
     bg="#1c1f24", surface="#262a31", border="#3c4149", text="#e8eaed", text_muted="#9aa0aa",
     primary="#5b9bff", primary_hover="#7bacff", primary_pressed="#3f7de0", on_primary="#0d1117",
+    accent="#22d3ee",
     danger="#ff7a7a", disabled_bg="#20242a", disabled_fg="#5b6169",
     state_draft="#9aa0aa", state_pending="#5b9bff", state_synced="#4cd97b", state_error="#ff7a7a",
 )
@@ -38,6 +40,17 @@ def get_state_colors() -> dict[str, str]:
         "pending_sync": _current["state_pending"],
         "synced": _current["state_synced"],
         "error": _current["state_error"],
+    }
+
+
+def get_ring_colors() -> dict[str, str]:
+    """Current theme's colors for the TimerRingWidget."""
+    return {
+        "track": _current["border"],
+        "gradient_start": _current["primary"],
+        "gradient_end": _current["accent"],
+        "text": _current["text"],
+        "muted_text": _current["text_muted"],
     }
 
 
@@ -139,6 +152,30 @@ QPushButton#primaryButton:disabled {{
 QPushButton#dangerButton:hover {{
     border-color: {c['danger']};
     color: {c['danger']};
+}}
+
+QPushButton#heroButton {{
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 {c['primary']}, stop:1 {c['accent']});
+    color: {c['on_primary']};
+    border: none;
+    border-radius: 20px;
+    font-weight: 700;
+    font-size: 11pt;
+    padding: 10px 30px;
+}}
+
+QPushButton#heroButton:hover {{
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 {c['primary_hover']}, stop:1 {c['accent']});
+    color: {c['on_primary']};
+}}
+
+QPushButton#heroButton:pressed {{
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 {c['primary_pressed']}, stop:1 {c['accent']});
+}}
+
+QPushButton#heroButton:disabled {{
+    background: {c['disabled_bg']};
+    color: {c['disabled_fg']};
 }}
 
 QLineEdit, QComboBox, QDateEdit, QDoubleSpinBox {{

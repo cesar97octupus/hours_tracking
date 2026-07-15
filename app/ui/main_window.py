@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 from PySide6.QtCore import QTimer as QtTimer, Qt
 from PySide6.QtWidgets import (
     QApplication,
+    QCheckBox,
     QComboBox,
     QGroupBox,
     QHBoxLayout,
@@ -22,10 +23,11 @@ from app import repository as repo
 from app.dto import TaskRef, TicketRef
 from app.odoo_client import OdooClient
 from app.rounding import round_up_to_quarter_hour
-from app.timer import Timer, start_and_persist, stop_and_persist
+from app.timer import MAX_TIMER_SECONDS, Timer, start_and_persist, stop_and_persist
 from app.ui import theme
 from app.ui.entries_list_widget import EntriesListWidget
 from app.ui.entry_dialog import EntryDialog
+from app.ui.timer_ring import TimerRingWidget
 from app.ui.tray import Tray
 from app.ui.workers import run_async
 
@@ -45,6 +47,8 @@ class MainWindow(QMainWindow):
         self.timer: Timer | None = None
         self._tasks: list[TaskRef] = []
         self._tickets: list[TicketRef] = []
+        self._task_ids_with_hours: set[int] = set()
+        self._ticket_ids_with_hours: set[int] = set()
         self.helpdesk_installed = bool((repo.get_app_state(conn, "helpdesk_installed") or {}).get("value"))
 
         self.setWindowTitle("hours_tracking")
@@ -71,21 +75,21 @@ class MainWindow(QMainWindow):
         self.search_edit.setPlaceholderText("Buscar por nombre…")
         self.search_edit.textChanged.connect(lambda _t: self._reload_combo())
 
+        self.no_hours_checkbox = QCheckBox("Solo sin registros de horas")
+        self.no_hours_checkbox.setToolTip(
+            "Se actualiza al pulsar «Actualizar tareas/tickets» — consulta a Odoo cuáles no tienen ninguna hora registrada."
+        )
+        self.no_hours_checkbox.stateChanged.connect(lambda _s: self._reload_combo())
+
         self.refresh_button = QPushButton("Actualizar tareas/tickets")
         self.refresh_button.clicked.connect(lambda: self._refresh_picker(live=True))
 
         self.start_stop_button = QPushButton("Iniciar")
-        self.start_stop_button.setObjectName("primaryButton")
+        self.start_stop_button.setObjectName("heroButton")
         self.start_stop_button.setMinimumHeight(40)
         self.start_stop_button.clicked.connect(lambda: self._on_start_stop_clicked())
 
-        self.elapsed_label = QLabel("00:00:00")
-        self.elapsed_label.setObjectName("elapsedLabel")
-        self.elapsed_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        elapsed_font = self.elapsed_label.font()
-        elapsed_font.setPointSize(30)
-        elapsed_font.setFamily("Consolas")
-        self.elapsed_label.setFont(elapsed_font)
+        self.timer_ring = TimerRingWidget()
 
         picker_row = QHBoxLayout()
         picker_row.setSpacing(10)
@@ -98,6 +102,7 @@ class MainWindow(QMainWindow):
         filter_row.addWidget(QLabel("Estado:"))
         filter_row.addWidget(self.stage_filter_combo)
         filter_row.addWidget(self.search_edit, 1)
+        filter_row.addWidget(self.no_hours_checkbox)
 
         picker_group = QGroupBox("Selecciona una tarea o ticket")
         picker_group_layout = QVBoxLayout(picker_group)
@@ -110,8 +115,8 @@ class MainWindow(QMainWindow):
         timer_group_layout = QVBoxLayout(timer_group)
         timer_group_layout.setSpacing(12)
         timer_group_layout.addWidget(self.description_edit)
-        timer_group_layout.addWidget(self.elapsed_label)
-        timer_group_layout.addWidget(self.start_stop_button)
+        timer_group_layout.addWidget(self.timer_ring, alignment=Qt.AlignmentFlag.AlignHCenter)
+        timer_group_layout.addWidget(self.start_stop_button, alignment=Qt.AlignmentFlag.AlignHCenter)
 
         controls = QWidget()
         controls_layout = QVBoxLayout(controls)
@@ -169,10 +174,26 @@ class MainWindow(QMainWindow):
     def _on_tasks_fetched(self, tasks: list[TaskRef]) -> None:
         repo.replace_cached_tasks(self.conn, tasks)
         self._populate_picker(repo.list_cached_tasks(self.conn), repo.list_cached_tickets(self.conn))
+        run_async(
+            self.client.fetch_ids_with_hours, "task_id", [t.id for t in tasks],
+            on_success=self._on_task_hours_flags_fetched, on_error=self._on_fetch_error,
+        )
 
     def _on_tickets_fetched(self, tickets: list[TicketRef]) -> None:
         repo.replace_cached_tickets(self.conn, tickets)
         self._populate_picker(repo.list_cached_tasks(self.conn), repo.list_cached_tickets(self.conn))
+        run_async(
+            self.client.fetch_ids_with_hours, "helpdesk_ticket_id", [t.id for t in tickets],
+            on_success=self._on_ticket_hours_flags_fetched, on_error=self._on_fetch_error,
+        )
+
+    def _on_task_hours_flags_fetched(self, ids_with_hours: set[int]) -> None:
+        self._task_ids_with_hours = ids_with_hours
+        self._reload_combo()
+
+    def _on_ticket_hours_flags_fetched(self, ids_with_hours: set[int]) -> None:
+        self._ticket_ids_with_hours = ids_with_hours
+        self._reload_combo()
 
     def _on_fetch_error(self, exc: Exception) -> None:
         self.status_label.setText(f"Error al actualizar tareas/tickets: {exc}")
@@ -206,10 +227,14 @@ class MainWindow(QMainWindow):
         self.picker_combo.clear()
         stage_filter = self.stage_filter_combo.currentData()
         search_text = self.search_edit.text().strip().lower()
+        only_no_hours = self.no_hours_checkbox.isChecked()
+        ids_with_hours = self._task_ids_with_hours if self.task_radio.isChecked() else self._ticket_ids_with_hours
         for item in self._current_items():
             if stage_filter is not None and item.stage_id != stage_filter:
                 continue
             if search_text and search_text not in item.name.lower():
+                continue
+            if only_no_hours and item.id in ids_with_hours:
                 continue
             label = f"#{item.id} {item.name}"
             if item.project_name:
@@ -270,14 +295,17 @@ class MainWindow(QMainWindow):
         self.picker_combo.setEnabled(not running)
         self.description_edit.setEnabled(not running)
         self.tray.set_running(running, self.description_edit.text())
+        self.timer_ring.set_running(running)
         if not running:
-            self.elapsed_label.setText("00:00:00")
+            self.timer_ring.set_time_text("00:00:00")
+            self.timer_ring.set_progress(0.0)
 
     def _on_tick(self) -> None:
         if self.timer is None:
             return
         elapsed = self.timer.elapsed_seconds()
-        self.elapsed_label.setText(_format_hms(elapsed))
+        self.timer_ring.set_time_text(_format_hms(elapsed))
+        self.timer_ring.set_progress(elapsed / MAX_TIMER_SECONDS)
         self.tray.set_running(True, _format_hms(elapsed))
         if self.timer.exceeded_max_duration():
             self._stop_timer(auto=True)
