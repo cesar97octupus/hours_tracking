@@ -1,8 +1,10 @@
-from PySide6.QtCore import QTime
+from PySide6.QtCore import QTime, QTimer
 from PySide6.QtWidgets import (
     QCheckBox,
     QGroupBox,
     QHBoxLayout,
+    QLabel,
+    QPushButton,
     QTimeEdit,
     QVBoxLayout,
     QWidget,
@@ -24,7 +26,6 @@ class SettingsWidget(QWidget):
 
         self.autostart_checkbox = QCheckBox("Iniciar automáticamente con Windows")
         self.autostart_checkbox.setChecked(ui.autostart_enabled)
-        self.autostart_checkbox.stateChanged.connect(self._on_autostart_changed)
 
         general_group = QGroupBox("General")
         general_layout = QVBoxLayout(general_group)
@@ -32,17 +33,13 @@ class SettingsWidget(QWidget):
 
         self.checkin_checkbox = QCheckBox("Recordar entrada")
         self.checkin_checkbox.setChecked(ui.checkin_alarm_enabled)
-        self.checkin_checkbox.stateChanged.connect(self._on_alarms_changed)
         self.checkin_time_edit = QTimeEdit(_time_from_str(ui.checkin_alarm_time))
         self.checkin_time_edit.setDisplayFormat("HH:mm")
-        self.checkin_time_edit.timeChanged.connect(self._on_alarms_changed)
 
         self.checkout_checkbox = QCheckBox("Recordar salida")
         self.checkout_checkbox.setChecked(ui.checkout_alarm_enabled)
-        self.checkout_checkbox.stateChanged.connect(self._on_alarms_changed)
         self.checkout_time_edit = QTimeEdit(_time_from_str(ui.checkout_alarm_time))
         self.checkout_time_edit.setDisplayFormat("HH:mm")
-        self.checkout_time_edit.timeChanged.connect(self._on_alarms_changed)
 
         checkin_row = QHBoxLayout()
         checkin_row.addWidget(self.checkin_checkbox)
@@ -59,30 +56,35 @@ class SettingsWidget(QWidget):
         alarms_layout.addLayout(checkin_row)
         alarms_layout.addLayout(checkout_row)
 
+        self.save_button = QPushButton("Guardar")
+        self.save_button.clicked.connect(self._on_save_clicked)
+        self.saved_label = QLabel("")
+        self.saved_label.setObjectName("statusLabel")
+
+        save_row = QHBoxLayout()
+        save_row.addWidget(self.save_button)
+        save_row.addWidget(self.saved_label)
+        save_row.addStretch(1)
+
         layout = QVBoxLayout(self)
         layout.setContentsMargins(16, 16, 16, 16)
         layout.setSpacing(14)
         layout.addWidget(general_group)
         layout.addWidget(alarms_group)
+        layout.addLayout(save_row)
         layout.addStretch(1)
 
-    def _on_autostart_changed(self, _state: int) -> None:
-        enabled = self.autostart_checkbox.isChecked()
-        autostart.set_enabled(enabled)
-        self._update_config(autostart_enabled=enabled)
-
-    def _on_alarms_changed(self, *_args) -> None:
-        self._update_config(
-            checkin_alarm_enabled=self.checkin_checkbox.isChecked(),
-            checkin_alarm_time=self.checkin_time_edit.time().toString("HH:mm"),
-            checkout_alarm_enabled=self.checkout_checkbox.isChecked(),
-            checkout_alarm_time=self.checkout_time_edit.time().toString("HH:mm"),
-        )
-
-    def _update_config(self, **fields) -> None:
+    def _on_save_clicked(self) -> None:
         cfg = config.load_config()
         if not cfg:
             return
-        for key, value in fields.items():
-            setattr(cfg.ui, key, value)
+        cfg.ui.autostart_enabled = self.autostart_checkbox.isChecked()
+        cfg.ui.checkin_alarm_enabled = self.checkin_checkbox.isChecked()
+        cfg.ui.checkin_alarm_time = self.checkin_time_edit.time().toString("HH:mm")
+        cfg.ui.checkout_alarm_enabled = self.checkout_checkbox.isChecked()
+        cfg.ui.checkout_alarm_time = self.checkout_time_edit.time().toString("HH:mm")
         config.save_config(cfg)
+        autostart.set_enabled(cfg.ui.autostart_enabled)
+
+        self.saved_label.setText("Cambios guardados ✓")
+        QTimer.singleShot(3000, lambda: self.saved_label.setText(""))
