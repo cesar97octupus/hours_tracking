@@ -19,6 +19,12 @@ class UiPrefs:
     checkin_alarm_time: str = "09:00"
     checkout_alarm_enabled: bool = False
     checkout_alarm_time: str = "18:00"
+    hours_alarm_enabled: bool = False
+    hours_alarm_time: str = "16:00"
+    filter_stage_id: int | None = None
+    filter_no_hours_only: bool = False
+    filter_created_after_enabled: bool = False
+    filter_created_after_date: str = ""
 
 
 @dataclass

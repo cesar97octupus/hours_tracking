@@ -30,10 +30,13 @@ from app.exceptions import (
     OdooFault,
 )
 from app.odoo_client import OdooClient
+from app.timer import MAX_TIMER_SECONDS
 from app.ui import theme
 from app.ui.entry_dialog import EntryDialog
 from app.ui.new_entry_dialog import NewEntryDialog
 from app.ui.workers import run_async
+
+_FULL_DAY_HOURS = MAX_TIMER_SECONDS / 3600
 
 _STATE_LABELS = {
     "draft": "Borrador",
@@ -192,6 +195,8 @@ class EntriesListWidget(QWidget):
             bold_font = header.font(0)
             bold_font.setBold(True)
             header.setFont(0, bold_font)
+            if day_total < _FULL_DAY_HOURS:
+                header.setForeground(0, QColor(theme.get_danger_color()))
             self.tree.addTopLevelItem(header)
 
             for entry in day_entries:

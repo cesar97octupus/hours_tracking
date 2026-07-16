@@ -35,6 +35,9 @@ from app.ui.tray import Tray
 from app.ui.workers import run_async
 
 
+_HOURS_ALARM_THRESHOLD = 0.8  # notify if less than 80% of the daily 7h cutoff is logged by the configured time
+
+
 def _format_hms(seconds: float) -> str:
     total = int(seconds)
     h, rem = divmod(total, 3600)
@@ -56,6 +59,9 @@ class MainWindow(QMainWindow):
         self.attendance_installed = bool((repo.get_app_state(conn, "attendance_installed") or {}).get("value"))
         self._checkin_notified_date: date | None = None
         self._checkout_notified_date: date | None = None
+        self._hours_notified_date: date | None = None
+        saved_ui = (config.load_config() or config.AppConfig(odoo_url="", odoo_db="", odoo_username="")).ui
+        self._pending_stage_filter_id = saved_ui.filter_stage_id
 
         self.setWindowTitle("hours_tracking")
         self.resize(640, 560)
@@ -75,7 +81,7 @@ class MainWindow(QMainWindow):
         self.description_edit.setPlaceholderText("Descripción del trabajo…")
 
         self.stage_filter_combo = QComboBox()
-        self.stage_filter_combo.currentIndexChanged.connect(lambda _i: self._reload_combo())
+        self.stage_filter_combo.currentIndexChanged.connect(lambda _i: self._on_stage_filter_changed())
 
         self.search_edit = QLineEdit()
         self.search_edit.setPlaceholderText("Buscar por nombre…")
@@ -85,7 +91,7 @@ class MainWindow(QMainWindow):
         self.no_hours_checkbox.setToolTip(
             "Se actualiza al pulsar «Actualizar tareas/tickets» — consulta a Odoo cuáles no tienen ninguna hora registrada."
         )
-        self.no_hours_checkbox.stateChanged.connect(lambda _s: self._reload_combo())
+        self.no_hours_checkbox.stateChanged.connect(lambda _s: self._on_no_hours_toggled())
 
         self.refresh_button = QPushButton()
         self.refresh_button.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_BrowserReload))
@@ -98,7 +104,16 @@ class MainWindow(QMainWindow):
         self.created_after_edit = QDateEdit(QDate.currentDate())
         self.created_after_edit.setCalendarPopup(True)
         self.created_after_edit.setEnabled(False)
-        self.created_after_edit.dateChanged.connect(lambda _d: self._reload_combo())
+        self.created_after_edit.dateChanged.connect(lambda _d: self._on_created_after_date_changed())
+
+        if saved_ui.filter_no_hours_only:
+            self.no_hours_checkbox.setChecked(True)
+        if saved_ui.filter_created_after_date:
+            parsed_date = QDate.fromString(saved_ui.filter_created_after_date, "yyyy-MM-dd")
+            if parsed_date.isValid():
+                self.created_after_edit.setDate(parsed_date)
+        if saved_ui.filter_created_after_enabled:
+            self.created_after_checkbox.setChecked(True)
 
         self.attendance_button = QPushButton("Registrar entrada")
         self.attendance_button.clicked.connect(self._on_attendance_clicked)
@@ -256,6 +271,9 @@ class MainWindow(QMainWindow):
                 stages[item.stage_id] = item.stage_name or str(item.stage_id)
 
         previous = self.stage_filter_combo.currentData()
+        if previous is None and self._pending_stage_filter_id is not None:
+            previous = self._pending_stage_filter_id
+            self._pending_stage_filter_id = None
         self.stage_filter_combo.blockSignals(True)
         self.stage_filter_combo.clear()
         self.stage_filter_combo.addItem("Todos los estados", None)
@@ -292,9 +310,32 @@ class MainWindow(QMainWindow):
         self._refresh_stage_filter_options()
         self._reload_combo()
 
+    def _on_stage_filter_changed(self) -> None:
+        self._reload_combo()
+        self._persist_filters()
+
+    def _on_no_hours_toggled(self) -> None:
+        self._reload_combo()
+        self._persist_filters()
+
     def _on_created_after_toggled(self, _state: int) -> None:
         self.created_after_edit.setEnabled(self.created_after_checkbox.isChecked())
         self._reload_combo()
+        self._persist_filters()
+
+    def _on_created_after_date_changed(self) -> None:
+        self._reload_combo()
+        self._persist_filters()
+
+    def _persist_filters(self) -> None:
+        cfg = config.load_config()
+        if not cfg:
+            return
+        cfg.ui.filter_stage_id = self.stage_filter_combo.currentData()
+        cfg.ui.filter_no_hours_only = self.no_hours_checkbox.isChecked()
+        cfg.ui.filter_created_after_enabled = self.created_after_checkbox.isChecked()
+        cfg.ui.filter_created_after_date = self.created_after_edit.date().toString("yyyy-MM-dd")
+        config.save_config(cfg)
 
     # ---- timer control --------------------------------------------------
 
@@ -410,6 +451,27 @@ class MainWindow(QMainWindow):
         ):
             self._checkout_notified_date = today
             self.tray.notify("hours_tracking", "Recuerda registrar tu salida.")
+
+        if (
+            cfg.ui.hours_alarm_enabled
+            and cfg.ui.hours_alarm_time == current_hm
+            and self._hours_notified_date != today
+        ):
+            self._hours_notified_date = today
+            self._check_hours_logged_today(today)
+
+    def _check_hours_logged_today(self, today: date) -> None:
+        expected_hours = MAX_TIMER_SECONDS / 3600
+        threshold = expected_hours * _HOURS_ALARM_THRESHOLD
+        logged = sum(
+            e.unit_amount for e in repo.list_entries(self.conn) if e.entry_date == today.isoformat()
+        )
+        if logged < threshold:
+            self.tray.notify(
+                "hours_tracking",
+                f"Llevas {logged:.2f} h registradas hoy, por debajo del "
+                f"{int(_HOURS_ALARM_THRESHOLD * 100)}% de tu jornada ({expected_hours:.1f} h).",
+            )
 
     # ---- crash recovery -------------------------------------------------
 

@@ -11,6 +11,9 @@ from PySide6.QtWidgets import (
 )
 
 from app import autostart, config
+from app.timer import MAX_TIMER_SECONDS
+
+_HOURS_ALARM_THRESHOLD = 0.8
 
 
 def _time_from_str(value: str) -> QTime:
@@ -56,6 +59,30 @@ class SettingsWidget(QWidget):
         alarms_layout.addLayout(checkin_row)
         alarms_layout.addLayout(checkout_row)
 
+        expected_hours = MAX_TIMER_SECONDS / 3600
+        threshold_hours = expected_hours * _HOURS_ALARM_THRESHOLD
+        self.hours_checkbox = QCheckBox("Recordar registrar horas")
+        self.hours_checkbox.setChecked(ui.hours_alarm_enabled)
+        self.hours_time_edit = QTimeEdit(_time_from_str(ui.hours_alarm_time))
+        self.hours_time_edit.setDisplayFormat("HH:mm")
+
+        hours_row = QHBoxLayout()
+        hours_row.addWidget(self.hours_checkbox)
+        hours_row.addWidget(self.hours_time_edit)
+        hours_row.addStretch(1)
+
+        hours_hint = QLabel(
+            f"Si a esa hora no has registrado al menos el {int(_HOURS_ALARM_THRESHOLD * 100)}% de tu "
+            f"jornada ({threshold_hours:.1f} h de {expected_hours:.0f} h), te lo recordamos."
+        )
+        hours_hint.setObjectName("statusLabel")
+        hours_hint.setWordWrap(True)
+
+        hours_group = QGroupBox("Registro de horas")
+        hours_layout = QVBoxLayout(hours_group)
+        hours_layout.addLayout(hours_row)
+        hours_layout.addWidget(hours_hint)
+
         self.save_button = QPushButton("Guardar")
         self.save_button.clicked.connect(self._on_save_clicked)
         self.saved_label = QLabel("")
@@ -71,6 +98,7 @@ class SettingsWidget(QWidget):
         layout.setSpacing(14)
         layout.addWidget(general_group)
         layout.addWidget(alarms_group)
+        layout.addWidget(hours_group)
         layout.addLayout(save_row)
         layout.addStretch(1)
 
@@ -83,6 +111,8 @@ class SettingsWidget(QWidget):
         cfg.ui.checkin_alarm_time = self.checkin_time_edit.time().toString("HH:mm")
         cfg.ui.checkout_alarm_enabled = self.checkout_checkbox.isChecked()
         cfg.ui.checkout_alarm_time = self.checkout_time_edit.time().toString("HH:mm")
+        cfg.ui.hours_alarm_enabled = self.hours_checkbox.isChecked()
+        cfg.ui.hours_alarm_time = self.hours_time_edit.time().toString("HH:mm")
         config.save_config(cfg)
         autostart.set_enabled(cfg.ui.autostart_enabled)
 

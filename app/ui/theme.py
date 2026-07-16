@@ -43,6 +43,10 @@ def get_state_colors() -> dict[str, str]:
     }
 
 
+def get_danger_color() -> str:
+    return _current["danger"]
+
+
 def get_ring_colors() -> dict[str, str]:
     """Current theme's colors for the TimerRingWidget."""
     return {
