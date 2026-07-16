@@ -54,9 +54,13 @@ class MainWindow(QMainWindow):
         self._ticket_ids_with_hours: set[int] = set()
         self.helpdesk_installed = bool((repo.get_app_state(conn, "helpdesk_installed") or {}).get("value"))
         self.attendance_installed = bool((repo.get_app_state(conn, "attendance_installed") or {}).get("value"))
-        self._checkin_notified_date: date | None = None
-        self._checkout_notified_date: date | None = None
-        self._hours_notified_date: date | None = None
+        # (date, configured HH:MM) of the last notification fired per alarm —
+        # keying on the configured time too (not just the date) means editing
+        # an alarm's time later the same day counts as a new target and fires
+        # again, instead of staying silenced because "today" already notified.
+        self._checkin_notified_key: tuple[date, str] | None = None
+        self._checkout_notified_key: tuple[date, str] | None = None
+        self._hours_notified_key: tuple[date, str] | None = None
         saved_ui = (config.load_config() or config.AppConfig(odoo_url="", odoo_db="", odoo_username="")).ui
         self._pending_stage_filter_id = saved_ui.filter_stage_id
 
@@ -436,31 +440,26 @@ class MainWindow(QMainWindow):
         # ">=" rather than "==": a 30s poll only overlaps the alarm's exact
         # minute for one or two ticks, so an app that starts late, wakes from
         # sleep, or hiccups on a tick would otherwise miss that alarm for the
-        # rest of the day. Once we've passed the configured time, fire on the
-        # next tick regardless — the per-day guard still limits it to once.
-        if (
-            cfg.ui.checkin_alarm_enabled
-            and current_hm >= cfg.ui.checkin_alarm_time
-            and self._checkin_notified_date != today
-        ):
-            self._checkin_notified_date = today
-            self.tray.notify("hours_tracking", "Recuerda registrar tu entrada.")
+        # rest of the day. The (date, configured time) key means it still
+        # fires only once per target — but editing the time later the same
+        # day is a new target, so it fires again instead of staying silenced.
+        if cfg.ui.checkin_alarm_enabled and current_hm >= cfg.ui.checkin_alarm_time:
+            key = (today, cfg.ui.checkin_alarm_time)
+            if self._checkin_notified_key != key:
+                self._checkin_notified_key = key
+                self.tray.notify("hours_tracking", "Recuerda registrar tu entrada.")
 
-        if (
-            cfg.ui.checkout_alarm_enabled
-            and current_hm >= cfg.ui.checkout_alarm_time
-            and self._checkout_notified_date != today
-        ):
-            self._checkout_notified_date = today
-            self.tray.notify("hours_tracking", "Recuerda registrar tu salida.")
+        if cfg.ui.checkout_alarm_enabled and current_hm >= cfg.ui.checkout_alarm_time:
+            key = (today, cfg.ui.checkout_alarm_time)
+            if self._checkout_notified_key != key:
+                self._checkout_notified_key = key
+                self.tray.notify("hours_tracking", "Recuerda registrar tu salida.")
 
-        if (
-            cfg.ui.hours_alarm_enabled
-            and current_hm >= cfg.ui.hours_alarm_time
-            and self._hours_notified_date != today
-        ):
-            self._hours_notified_date = today
-            self._notify_hours_logged_today(today)
+        if cfg.ui.hours_alarm_enabled and current_hm >= cfg.ui.hours_alarm_time:
+            key = (today, cfg.ui.hours_alarm_time)
+            if self._hours_notified_key != key:
+                self._hours_notified_key = key
+                self._notify_hours_logged_today(today)
 
     def _notify_hours_logged_today(self, today: date) -> None:
         logged = sum(
