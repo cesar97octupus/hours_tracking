@@ -377,6 +377,7 @@ imported by:
  &#8226;   <a href="#app.ui.entry_dialog">app.ui.entry_dialog</a>
  &#8226;   <a href="#app.ui.main_window">app.ui.main_window</a>
  &#8226;   <a href="#app.ui.new_entry_dialog">app.ui.new_entry_dialog</a>
+ &#8226;   <a href="#app.ui.settings_widget">app.ui.settings_widget</a>
  &#8226;   <a href="#app.ui.timer_ring">app.ui.timer_ring</a>
  &#8226;   <a href="#app.ui.tray">app.ui.tray</a>
  &#8226;   <a href="#app.ui.workers">app.ui.workers</a>
@@ -461,6 +462,7 @@ imported by:
  &#8226;   <a href="#app.ui.entry_dialog">app.ui.entry_dialog</a>
  &#8226;   <a href="#app.ui.main_window">app.ui.main_window</a>
  &#8226;   <a href="#app.ui.new_entry_dialog">app.ui.new_entry_dialog</a>
+ &#8226;   <a href="#app.ui.settings_widget">app.ui.settings_widget</a>
  &#8226;   <a href="#app.ui.setup_wizard">app.ui.setup_wizard</a>
  &#8226;   <a href="#app.ui.theme">app.ui.theme</a>
  &#8226;   <a href="#app.ui.timer_ring">app.ui.timer_ring</a>
@@ -1750,7 +1752,8 @@ imported by:
   <a target="code" href="///D:/Octupus/hours_tracking/app/__init__.py" type="text/plain"><tt>app</tt></a>
 <span class="moduletype">Package</span>  <div class="import">
 imports:
-    <a href="#app.config">app.config</a>
+    <a href="#app.autostart">app.autostart</a>
+ &#8226;   <a href="#app.config">app.config</a>
  &#8226;   <a href="#app.repository">app.repository</a>
  &#8226;   <a href="#app.timesheet_export">app.timesheet_export</a>
  &#8226;   <a href="#app.timesheet_sync">app.timesheet_sync</a>
@@ -1758,7 +1761,8 @@ imports:
   </div>
   <div class="import">
 imported by:
-    <a href="#app.config">app.config</a>
+    <a href="#app.autostart">app.autostart</a>
+ &#8226;   <a href="#app.config">app.config</a>
  &#8226;   <a href="#app.db">app.db</a>
  &#8226;   <a href="#app.dto">app.dto</a>
  &#8226;   <a href="#app.exceptions">app.exceptions</a>
@@ -1774,6 +1778,29 @@ imported by:
  &#8226;   <a href="#app.ui.entry_dialog">app.ui.entry_dialog</a>
  &#8226;   <a href="#app.ui.main_window">app.ui.main_window</a>
  &#8226;   <a href="#app.ui.new_entry_dialog">app.ui.new_entry_dialog</a>
+ &#8226;   <a href="#app.ui.settings_widget">app.ui.settings_widget</a>
+ &#8226;   <a href="#app.ui.setup_wizard">app.ui.setup_wizard</a>
+
+  </div>
+
+</div>
+
+<div class="node">
+  <a name="app.autostart"></a>
+  <a target="code" href="///D:/Octupus/hours_tracking/app/autostart.py" type="text/plain"><tt>app.autostart</tt></a>
+<span class="moduletype">SourceModule</span>  <div class="import">
+imports:
+    <a href="#app">app</a>
+ &#8226;   <a href="#pathlib">pathlib</a>
+ &#8226;   <a href="#sys">sys</a>
+ &#8226;   <a href="#winreg">winreg</a>
+
+  </div>
+  <div class="import">
+imported by:
+    <a href="#app">app</a>
+ &#8226;   <a href="#app.main">app.main</a>
+ &#8226;   <a href="#app.ui.settings_widget">app.ui.settings_widget</a>
  &#8226;   <a href="#app.ui.setup_wizard">app.ui.setup_wizard</a>
 
   </div>
@@ -1796,6 +1823,8 @@ imports:
 imported by:
     <a href="#app">app</a>
  &#8226;   <a href="#app.main">app.main</a>
+ &#8226;   <a href="#app.ui.main_window">app.ui.main_window</a>
+ &#8226;   <a href="#app.ui.settings_widget">app.ui.settings_widget</a>
  &#8226;   <a href="#app.ui.setup_wizard">app.ui.setup_wizard</a>
 
   </div>
@@ -1878,6 +1907,7 @@ imports:
     <a href="#PySide6.QtCore">PySide6.QtCore</a>
  &#8226;   <a href="#PySide6.QtWidgets">PySide6.QtWidgets</a>
  &#8226;   <a href="#app">app</a>
+ &#8226;   <a href="#app.autostart">app.autostart</a>
  &#8226;   <a href="#app.config">app.config</a>
  &#8226;   <a href="#app.db">app.db</a>
  &#8226;   <a href="#app.odoo_client">app.odoo_client</a>
@@ -1885,6 +1915,7 @@ imports:
  &#8226;   <a href="#app.ui.main_window">app.ui.main_window</a>
  &#8226;   <a href="#app.ui.setup_wizard">app.ui.setup_wizard</a>
  &#8226;   <a href="#app.ui.theme">app.ui.theme</a>
+ &#8226;   <a href="#argparse">argparse</a>
  &#8226;   <a href="#sys">sys</a>
 
   </div>
@@ -1905,7 +1936,11 @@ imports:
  &#8226;   <a href="#app.dto">app.dto</a>
  &#8226;   <a href="#app.exceptions">app.exceptions</a>
  &#8226;   <a href="#contextlib">contextlib</a>
+ &#8226;   <a href="#http.cookiejar">http.cookiejar</a>
+ &#8226;   <a href="#json">json</a>
  &#8226;   <a href="#socket">socket</a>
+ &#8226;   <a href="#urllib.error">urllib.error</a>
+ &#8226;   <a href="#urllib.request">urllib.request</a>
  &#8226;   <a href="#xmlrpc.client">xmlrpc.client</a>
 
   </div>
@@ -2055,6 +2090,7 @@ imported by:
  &#8226;   <a href="#app.ui.entry_dialog">app.ui.entry_dialog</a>
  &#8226;   <a href="#app.ui.main_window">app.ui.main_window</a>
  &#8226;   <a href="#app.ui.new_entry_dialog">app.ui.new_entry_dialog</a>
+ &#8226;   <a href="#app.ui.settings_widget">app.ui.settings_widget</a>
  &#8226;   <a href="#app.ui.setup_wizard">app.ui.setup_wizard</a>
  &#8226;   <a href="#app.ui.theme">app.ui.theme</a>
  &#8226;   <a href="#app.ui.timer_ring">app.ui.timer_ring</a>
@@ -2132,6 +2168,7 @@ imports:
     <a href="#PySide6.QtCore">PySide6.QtCore</a>
  &#8226;   <a href="#PySide6.QtWidgets">PySide6.QtWidgets</a>
  &#8226;   <a href="#app">app</a>
+ &#8226;   <a href="#app.config">app.config</a>
  &#8226;   <a href="#app.dto">app.dto</a>
  &#8226;   <a href="#app.odoo_client">app.odoo_client</a>
  &#8226;   <a href="#app.repository">app.repository</a>
@@ -2140,6 +2177,7 @@ imports:
  &#8226;   <a href="#app.ui">app.ui</a>
  &#8226;   <a href="#app.ui.entries_list_widget">app.ui.entries_list_widget</a>
  &#8226;   <a href="#app.ui.entry_dialog">app.ui.entry_dialog</a>
+ &#8226;   <a href="#app.ui.settings_widget">app.ui.settings_widget</a>
  &#8226;   <a href="#app.ui.theme">app.ui.theme</a>
  &#8226;   <a href="#app.ui.timer_ring">app.ui.timer_ring</a>
  &#8226;   <a href="#app.ui.tray">app.ui.tray</a>
@@ -2179,12 +2217,34 @@ imported by:
 </div>
 
 <div class="node">
+  <a name="app.ui.settings_widget"></a>
+  <a target="code" href="///D:/Octupus/hours_tracking/app/ui/settings_widget.py" type="text/plain"><tt>app.ui.settings_widget</tt></a>
+<span class="moduletype">SourceModule</span>  <div class="import">
+imports:
+    <a href="#PySide6.QtCore">PySide6.QtCore</a>
+ &#8226;   <a href="#PySide6.QtWidgets">PySide6.QtWidgets</a>
+ &#8226;   <a href="#app">app</a>
+ &#8226;   <a href="#app.autostart">app.autostart</a>
+ &#8226;   <a href="#app.config">app.config</a>
+ &#8226;   <a href="#app.ui">app.ui</a>
+
+  </div>
+  <div class="import">
+imported by:
+    <a href="#app.ui.main_window">app.ui.main_window</a>
+
+  </div>
+
+</div>
+
+<div class="node">
   <a name="app.ui.setup_wizard"></a>
   <a target="code" href="///D:/Octupus/hours_tracking/app/ui/setup_wizard.py" type="text/plain"><tt>app.ui.setup_wizard</tt></a>
 <span class="moduletype">SourceModule</span>  <div class="import">
 imports:
     <a href="#PySide6.QtWidgets">PySide6.QtWidgets</a>
  &#8226;   <a href="#app">app</a>
+ &#8226;   <a href="#app.autostart">app.autostart</a>
  &#8226;   <a href="#app.config">app.config</a>
  &#8226;   <a href="#app.dto">app.dto</a>
  &#8226;   <a href="#app.exceptions">app.exceptions</a>
@@ -2306,7 +2366,8 @@ imports:
   </div>
   <div class="import">
 imported by:
-    <a href="#ast">ast</a>
+    <a href="#app.main">app.main</a>
+ &#8226;   <a href="#ast">ast</a>
  &#8226;   <a href="#calendar">calendar</a>
  &#8226;   <a href="#code">code</a>
  &#8226;   <a href="#dis">dis</a>
@@ -8150,7 +8211,8 @@ imports:
   </div>
   <div class="import">
 imported by:
-    <a href="#urllib.request">urllib.request</a>
+    <a href="#app.odoo_client">app.odoo_client</a>
+ &#8226;   <a href="#urllib.request">urllib.request</a>
 
   </div>
 
@@ -9169,6 +9231,7 @@ imports:
   <div class="import">
 imported by:
     <a href="#app.config">app.config</a>
+ &#8226;   <a href="#app.odoo_client">app.odoo_client</a>
  &#8226;   <a href="#app.repository">app.repository</a>
  &#8226;   <a href="#json.decoder">json.decoder</a>
  &#8226;   <a href="#json.encoder">json.encoder</a>
@@ -11651,6 +11714,7 @@ imports:
   <div class="import">
 imported by:
     <a href="#PySide6">PySide6</a>
+ &#8226;   <a href="#app.autostart">app.autostart</a>
  &#8226;   <a href="#app.db">app.db</a>
  &#8226;   <a href="#importlib.metadata">importlib.metadata</a>
  &#8226;   <a href="#importlib.resources._common">importlib.resources._common</a>
@@ -16950,6 +17014,7 @@ imported by:
  &#8226;   <a href="#_pydecimal">_pydecimal</a>
  &#8226;   <a href="#_pyi_rth_utils">_pyi_rth_utils</a>
  &#8226;   <a href="#_sitebuiltins">_sitebuiltins</a>
+ &#8226;   <a href="#app.autostart">app.autostart</a>
  &#8226;   <a href="#app.main">app.main</a>
  &#8226;   <a href="#argparse">argparse</a>
  &#8226;   <a href="#ast">ast</a>
@@ -18233,7 +18298,8 @@ imports:
   </div>
   <div class="import">
 imported by:
-    <a href="#urllib.request">urllib.request</a>
+    <a href="#app.odoo_client">app.odoo_client</a>
+ &#8226;   <a href="#urllib.request">urllib.request</a>
 
   </div>
 
@@ -18313,7 +18379,8 @@ imports:
   </div>
   <div class="import">
 imported by:
-    <a href="#http.cookiejar">http.cookiejar</a>
+    <a href="#app.odoo_client">app.odoo_client</a>
+ &#8226;   <a href="#http.cookiejar">http.cookiejar</a>
  &#8226;   <a href="#jaraco.context">jaraco.context</a>
  &#8226;   <a href="#setuptools.config._validate_pyproject.formats">setuptools.config._validate_pyproject.formats</a>
  &#8226;   <a href="#xml.sax.saxutils">xml.sax.saxutils</a>
@@ -19030,7 +19097,8 @@ imported by:
   <a name="winreg"></a>
   <tt>winreg</tt> <span class="moduletype"><i>(builtin module)</i></span>  <div class="import">
 imported by:
-    <a href="#app.ui.theme">app.ui.theme</a>
+    <a href="#app.autostart">app.autostart</a>
+ &#8226;   <a href="#app.ui.theme">app.ui.theme</a>
  &#8226;   <a href="#importlib._bootstrap_external">importlib._bootstrap_external</a>
  &#8226;   <a href="#mimetypes">mimetypes</a>
  &#8226;   <a href="#platform">platform</a>

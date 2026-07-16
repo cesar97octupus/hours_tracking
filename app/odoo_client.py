@@ -1,6 +1,10 @@
+import json
 import socket
+import urllib.error
+import urllib.request
 import xmlrpc.client
 from contextlib import contextmanager
+from http.cookiejar import CookieJar
 
 from app.dto import EmployeeRef, FieldCapability, OptionRef, TaskRef, TicketRef
 from app.exceptions import (
@@ -40,6 +44,9 @@ class OdooClient:
         self.uid: int | None = None
         self._common = xmlrpc.client.ServerProxy(f"{self.url}/xmlrpc/2/common")
         self._models = xmlrpc.client.ServerProxy(f"{self.url}/xmlrpc/2/object")
+        self._web_cookies = CookieJar()
+        self._web_opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(self._web_cookies))
+        self._web_session_ready = False
 
     def _execute_kw(self, model: str, method: str, args: list, kwargs: dict | None = None):
         with _translate_errors():
@@ -102,7 +109,7 @@ class OdooClient:
         rows = self._execute_kw(
             "project.task", "search_read",
             [[("user_ids", "in", [self.uid]), ("project_id.allow_timesheets", "=", True)]],
-            {"fields": ["name", "project_id", "stage_id", "write_date"], "order": "write_date desc"},
+            {"fields": ["name", "project_id", "stage_id", "write_date", "create_date"], "order": "write_date desc"},
         )
         return [
             TaskRef(
@@ -111,6 +118,7 @@ class OdooClient:
                 stage_id=r["stage_id"][0] if r["stage_id"] else None,
                 stage_name=r["stage_id"][1] if r["stage_id"] else None,
                 write_date=r.get("write_date"),
+                create_date=r.get("create_date"),
             )
             for r in rows
         ]
@@ -122,11 +130,18 @@ class OdooClient:
         )
         return bool(count)
 
+    def probe_attendance_installed(self) -> bool:
+        count = self._execute_kw(
+            "ir.module.module", "search_count",
+            [[("name", "=", "hr_attendance"), ("state", "=", "installed")]],
+        )
+        return bool(count)
+
     def fetch_my_tickets(self) -> list[TicketRef]:
         rows = self._execute_kw(
             "helpdesk.ticket", "search_read",
             [[("user_id", "=", self.uid)]],
-            {"fields": ["name", "project_id", "stage_id", "write_date"], "order": "write_date desc"},
+            {"fields": ["name", "project_id", "stage_id", "write_date", "create_date"], "order": "write_date desc"},
         )
         return [
             TicketRef(
@@ -135,6 +150,7 @@ class OdooClient:
                 stage_id=r["stage_id"][0] if r.get("stage_id") else None,
                 stage_name=r["stage_id"][1] if r.get("stage_id") else None,
                 write_date=r.get("write_date"),
+                create_date=r.get("create_date"),
             )
             for r in rows
         ]
@@ -221,3 +237,58 @@ class OdooClient:
             domain.append(("helpdesk_ticket_id", "=", payload["helpdesk_ticket_id"]))
         rows = self._execute_kw("account.analytic.line", "search_read", [domain], {"fields": ["id"], "limit": 1})
         return rows[0]["id"] if rows else None
+
+    # ---- attendance (check-in / check-out) -------------------------------
+    #
+    # Regular employees are only ever granted the read-only
+    # hr_attendance.group_hr_attendance_own_reader group, which has no create/
+    # write rights on hr.attendance (confirmed against a live instance) — so
+    # creating/writing hr.attendance directly via XML-RPC fails with an
+    # access error for anyone but an Attendance Officer/Administrator. The
+    # web systray button works anyway because it doesn't touch hr.attendance
+    # via the ORM API layer at all: it POSTs to the /hr_attendance/
+    # systray_check_in_out controller under the browser's authenticated web
+    # session, which resolves the employee from the session itself. We
+    # replicate that exact call (session login + same controller route)
+    # instead of the ORM create/write, so this works under the same
+    # permissions as clicking the button.
+
+    def _web_json_rpc(self, path: str, params: dict) -> dict:
+        payload = json.dumps({"jsonrpc": "2.0", "method": "call", "params": params}).encode("utf-8")
+        request = urllib.request.Request(
+            f"{self.url}{path}", data=payload, headers={"Content-Type": "application/json"}
+        )
+        try:
+            with self._web_opener.open(request, timeout=self.timeout) as response:
+                body = json.loads(response.read())
+        except urllib.error.URLError as exc:
+            raise OdooConnectionError(str(exc)) from exc
+        if "error" in body:
+            data = body["error"].get("data") or {}
+            raise OdooFault(data.get("message") or body["error"].get("message") or str(body["error"]))
+        return body.get("result") or {}
+
+    def _ensure_web_session(self) -> None:
+        if self._web_session_ready:
+            return
+        result = self._web_json_rpc(
+            "/web/session/authenticate",
+            {"db": self.db, "login": self.username, "password": self.password},
+        )
+        if not result.get("uid"):
+            raise OdooAuthError("Odoo rejected the supplied credentials")
+        self._web_session_ready = True
+
+    def fetch_attendance_status(self) -> dict:
+        """Mirrors what the systray widget reads on load: attendance_state
+        ('checked_in'/'checked_out') plus today's hours for the logged-in
+        user's own employee record."""
+        self._ensure_web_session()
+        return self._web_json_rpc("/hr_attendance/attendance_user_data", {})
+
+    def toggle_attendance(self) -> dict:
+        """Same call the systray button's click handler makes — the server
+        decides sign-in vs. sign-out based on the current attendance state,
+        so there's nothing for the caller to track locally."""
+        self._ensure_web_session()
+        return self._web_json_rpc("/hr_attendance/systray_check_in_out", {})

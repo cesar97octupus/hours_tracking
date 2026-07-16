@@ -91,6 +91,12 @@ class TestRepository(unittest.TestCase):
         self.assertEqual([t.id for t in result], [2, 1, 3])  # most recent first, undated last
         self.assertEqual(result[0].stage_name, "Done")
 
+    def test_cached_tasks_roundtrip_create_date(self):
+        tasks = [TaskRef(id=1, name="Task", create_date="2026-06-07 08:00:00")]
+        repo.replace_cached_tasks(self.conn, tasks)
+        result = repo.list_cached_tasks(self.conn)
+        self.assertEqual(result[0].create_date, "2026-06-07 08:00:00")
+
     def test_create_synced_entry_from_odoo_and_known_ids(self):
         self.assertEqual(repo.get_known_odoo_line_ids(self.conn), set())
         entry_id = repo.create_synced_entry_from_odoo(

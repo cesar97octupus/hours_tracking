@@ -4,7 +4,7 @@ from pathlib import Path
 
 import platformdirs
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 # The connection is created once on the main thread but export/sync work runs
 # on QThreadPool worker threads (see app.ui.workers.run_async), so it must
@@ -75,16 +75,15 @@ CREATE TABLE active_timer (
 );
 """
 
-# v2: stage (status) + last-update timestamp on cached tasks/tickets, so the
-# picker can filter by stage and sort by recency.
-_MIGRATION_V2 = """
-ALTER TABLE cached_tasks ADD COLUMN stage_id INTEGER;
-ALTER TABLE cached_tasks ADD COLUMN stage_name TEXT;
-ALTER TABLE cached_tasks ADD COLUMN write_date TEXT;
-ALTER TABLE cached_tickets ADD COLUMN stage_id INTEGER;
-ALTER TABLE cached_tickets ADD COLUMN stage_name TEXT;
-ALTER TABLE cached_tickets ADD COLUMN write_date TEXT;
-"""
+def _add_column_if_missing(conn: sqlite3.Connection, table: str, column: str, coltype: str) -> None:
+    """ALTER TABLE ... ADD COLUMN is not idempotent in SQLite (no IF NOT
+    EXISTS), and PRAGMA user_version can end up behind the actual schema if a
+    prior migration's column-add committed but the version bump didn't (e.g.
+    a process killed mid-migration) — checking first keeps re-running a
+    migration step safe either way."""
+    cols = {row[1] for row in conn.execute(f"PRAGMA table_info({table})").fetchall()}
+    if column not in cols:
+        conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {coltype}")
 
 
 def get_app_dir() -> Path:
@@ -111,7 +110,14 @@ def _migrate(conn: sqlite3.Connection) -> None:
         conn.executescript(_SCHEMA)
         current = 1
     if current < 2:
-        conn.executescript(_MIGRATION_V2)
+        for table in ("cached_tasks", "cached_tickets"):
+            _add_column_if_missing(conn, table, "stage_id", "INTEGER")
+            _add_column_if_missing(conn, table, "stage_name", "TEXT")
+            _add_column_if_missing(conn, table, "write_date", "TEXT")
         current = 2
+    if current < 3:
+        for table in ("cached_tasks", "cached_tickets"):
+            _add_column_if_missing(conn, table, "create_date", "TEXT")
+        current = 3
     conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
     conn.commit()

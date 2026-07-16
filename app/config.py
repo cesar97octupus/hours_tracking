@@ -14,6 +14,11 @@ class UiPrefs:
     minimize_to_tray_on_close: bool = True
     window_geometry: str | None = None
     last_picker_mode: str = "task"
+    autostart_enabled: bool = True
+    checkin_alarm_enabled: bool = False
+    checkin_alarm_time: str = "09:00"
+    checkout_alarm_enabled: bool = False
+    checkout_alarm_time: str = "18:00"
 
 
 @dataclass

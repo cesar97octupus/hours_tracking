@@ -9,6 +9,7 @@ class TaskRef:
     stage_id: int | None = None
     stage_name: str | None = None
     write_date: str | None = None
+    create_date: str | None = None
 
 
 @dataclass
@@ -19,6 +20,7 @@ class TicketRef:
     stage_id: int | None = None
     stage_name: str | None = None
     write_date: str | None = None
+    create_date: str | None = None
 
 
 @dataclass

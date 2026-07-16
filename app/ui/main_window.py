@@ -1,11 +1,12 @@
 import sqlite3
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
-from PySide6.QtCore import QTimer as QtTimer, Qt
+from PySide6.QtCore import QDate, QTimer as QtTimer, Qt
 from PySide6.QtWidgets import (
     QApplication,
     QCheckBox,
     QComboBox,
+    QDateEdit,
     QGroupBox,
     QHBoxLayout,
     QLabel,
@@ -14,12 +15,13 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QPushButton,
     QRadioButton,
+    QStyle,
     QTabWidget,
     QVBoxLayout,
     QWidget,
 )
 
-from app import repository as repo
+from app import config, repository as repo
 from app.dto import TaskRef, TicketRef
 from app.odoo_client import OdooClient
 from app.rounding import round_up_to_quarter_hour
@@ -27,6 +29,7 @@ from app.timer import MAX_TIMER_SECONDS, Timer, start_and_persist, stop_and_pers
 from app.ui import theme
 from app.ui.entries_list_widget import EntriesListWidget
 from app.ui.entry_dialog import EntryDialog
+from app.ui.settings_widget import SettingsWidget
 from app.ui.timer_ring import TimerRingWidget
 from app.ui.tray import Tray
 from app.ui.workers import run_async
@@ -50,6 +53,9 @@ class MainWindow(QMainWindow):
         self._task_ids_with_hours: set[int] = set()
         self._ticket_ids_with_hours: set[int] = set()
         self.helpdesk_installed = bool((repo.get_app_state(conn, "helpdesk_installed") or {}).get("value"))
+        self.attendance_installed = bool((repo.get_app_state(conn, "attendance_installed") or {}).get("value"))
+        self._checkin_notified_date: date | None = None
+        self._checkout_notified_date: date | None = None
 
         self.setWindowTitle("hours_tracking")
         self.resize(640, 560)
@@ -81,8 +87,33 @@ class MainWindow(QMainWindow):
         )
         self.no_hours_checkbox.stateChanged.connect(lambda _s: self._reload_combo())
 
-        self.refresh_button = QPushButton("Actualizar tareas/tickets")
+        self.refresh_button = QPushButton()
+        self.refresh_button.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_BrowserReload))
+        self.refresh_button.setToolTip("Actualizar tareas/tickets")
+        self.refresh_button.setFixedSize(28, 28)
         self.refresh_button.clicked.connect(lambda: self._refresh_picker(live=True))
+
+        self.created_after_checkbox = QCheckBox("Creadas desde:")
+        self.created_after_checkbox.stateChanged.connect(self._on_created_after_toggled)
+        self.created_after_edit = QDateEdit(QDate.currentDate())
+        self.created_after_edit.setCalendarPopup(True)
+        self.created_after_edit.setEnabled(False)
+        self.created_after_edit.dateChanged.connect(lambda _d: self._reload_combo())
+
+        self.attendance_button = QPushButton("Registrar entrada")
+        self.attendance_button.clicked.connect(self._on_attendance_clicked)
+
+        self.attendance_dot = QLabel("●")
+        self.attendance_dot.setStyleSheet("color: red; font-size: 14px;")
+        self.attendance_dot.setToolTip("Sin fichar")
+
+        self.attendance_corner = QWidget()
+        attendance_corner_layout = QHBoxLayout(self.attendance_corner)
+        attendance_corner_layout.setContentsMargins(0, 0, 8, 0)
+        attendance_corner_layout.setSpacing(6)
+        attendance_corner_layout.addWidget(self.attendance_button)
+        attendance_corner_layout.addWidget(self.attendance_dot)
+        self.attendance_corner.setVisible(self.attendance_installed)
 
         self.start_stop_button = QPushButton("Iniciar")
         self.start_stop_button.setObjectName("heroButton")
@@ -96,6 +127,7 @@ class MainWindow(QMainWindow):
         picker_row.addWidget(self.task_radio)
         picker_row.addWidget(self.ticket_radio)
         picker_row.addWidget(self.picker_combo, 1)
+        picker_row.addWidget(self.refresh_button)
 
         filter_row = QHBoxLayout()
         filter_row.setSpacing(10)
@@ -103,13 +135,14 @@ class MainWindow(QMainWindow):
         filter_row.addWidget(self.stage_filter_combo)
         filter_row.addWidget(self.search_edit, 1)
         filter_row.addWidget(self.no_hours_checkbox)
+        filter_row.addWidget(self.created_after_checkbox)
+        filter_row.addWidget(self.created_after_edit)
 
         picker_group = QGroupBox("Selecciona una tarea o ticket")
         picker_group_layout = QVBoxLayout(picker_group)
         picker_group_layout.setSpacing(10)
         picker_group_layout.addLayout(picker_row)
         picker_group_layout.addLayout(filter_row)
-        picker_group_layout.addWidget(self.refresh_button)
 
         timer_group = QGroupBox("Cronómetro")
         timer_group_layout = QVBoxLayout(timer_group)
@@ -132,6 +165,8 @@ class MainWindow(QMainWindow):
         self.tabs = QTabWidget()
         self.tabs.addTab(controls, "Cronómetro")
         self.tabs.addTab(self.entries_widget, "Partes de horas")
+        self.tabs.addTab(SettingsWidget(), "Configuración")
+        self.tabs.setCornerWidget(self.attendance_corner, Qt.Corner.TopRightCorner)
         self.setCentralWidget(self.tabs)
 
         self.tray = Tray(self)
@@ -143,6 +178,11 @@ class MainWindow(QMainWindow):
         self.tick_timer = QtTimer(self)
         self.tick_timer.setInterval(1000)
         self.tick_timer.timeout.connect(self._on_tick)
+
+        self.alarm_timer = QtTimer(self)
+        self.alarm_timer.setInterval(30_000)
+        self.alarm_timer.timeout.connect(self._check_alarms)
+        self.alarm_timer.start()
 
         self._load_cached_picker()
         self._connect_and_load()
@@ -156,6 +196,8 @@ class MainWindow(QMainWindow):
     def _on_authenticated(self, _uid: int) -> None:
         self.status_label.setText("Conectado.")
         self._refresh_picker(live=True)
+        if self.attendance_installed:
+            self._refresh_attendance_status()
 
     def _on_connect_error(self, exc: Exception) -> None:
         self.status_label.setText(f"No se pudo conectar: {exc}")
@@ -228,6 +270,7 @@ class MainWindow(QMainWindow):
         stage_filter = self.stage_filter_combo.currentData()
         search_text = self.search_edit.text().strip().lower()
         only_no_hours = self.no_hours_checkbox.isChecked()
+        created_after = self.created_after_edit.date().toPython() if self.created_after_checkbox.isChecked() else None
         ids_with_hours = self._task_ids_with_hours if self.task_radio.isChecked() else self._ticket_ids_with_hours
         for item in self._current_items():
             if stage_filter is not None and item.stage_id != stage_filter:
@@ -235,6 +278,8 @@ class MainWindow(QMainWindow):
             if search_text and search_text not in item.name.lower():
                 continue
             if only_no_hours and item.id in ids_with_hours:
+                continue
+            if created_after and item.create_date and date.fromisoformat(item.create_date[:10]) < created_after:
                 continue
             label = f"#{item.id} {item.name}"
             if item.project_name:
@@ -245,6 +290,10 @@ class MainWindow(QMainWindow):
 
     def _on_picker_mode_changed(self, _checked: bool) -> None:
         self._refresh_stage_filter_options()
+        self._reload_combo()
+
+    def _on_created_after_toggled(self, _state: int) -> None:
+        self.created_after_edit.setEnabled(self.created_after_checkbox.isChecked())
         self._reload_combo()
 
     # ---- timer control --------------------------------------------------
@@ -309,6 +358,58 @@ class MainWindow(QMainWindow):
         self.tray.set_running(True, _format_hms(elapsed))
         if self.timer.exceeded_max_duration():
             self._stop_timer(auto=True)
+
+    # ---- attendance (check-in / check-out) -------------------------------
+
+    def _refresh_attendance_status(self) -> None:
+        run_async(
+            self.client.fetch_attendance_status,
+            on_success=self._apply_attendance_status, on_error=self._on_attendance_error,
+        )
+
+    def _apply_attendance_status(self, status: dict) -> None:
+        self.attendance_button.setEnabled(True)
+        checked_in = status.get("attendance_state") == "checked_in"
+        self.attendance_dot.setStyleSheet(f"color: {'green' if checked_in else 'red'}; font-size: 14px;")
+        self.attendance_dot.setToolTip("Fichado" if checked_in else "Sin fichar")
+        self.attendance_button.setText("Registrar salida" if checked_in else "Registrar entrada")
+
+    def _on_attendance_clicked(self) -> None:
+        self.attendance_button.setEnabled(False)
+        run_async(
+            self.client.toggle_attendance,
+            on_success=self._apply_attendance_status, on_error=self._on_attendance_error,
+        )
+
+    def _on_attendance_error(self, exc: Exception) -> None:
+        self.attendance_button.setEnabled(True)
+        QMessageBox.warning(self, "Error de asistencia", str(exc))
+
+    # ---- attendance alarms -------------------------------------------------
+
+    def _check_alarms(self) -> None:
+        cfg = config.load_config()
+        if not cfg:
+            return
+        now = datetime.now()
+        today = now.date()
+        current_hm = now.strftime("%H:%M")
+
+        if (
+            cfg.ui.checkin_alarm_enabled
+            and cfg.ui.checkin_alarm_time == current_hm
+            and self._checkin_notified_date != today
+        ):
+            self._checkin_notified_date = today
+            self.tray.notify("hours_tracking", "Recuerda registrar tu entrada.")
+
+        if (
+            cfg.ui.checkout_alarm_enabled
+            and cfg.ui.checkout_alarm_time == current_hm
+            and self._checkout_notified_date != today
+        ):
+            self._checkout_notified_date = today
+            self.tray.notify("hours_tracking", "Recuerda registrar tu salida.")
 
     # ---- crash recovery -------------------------------------------------
 

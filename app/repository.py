@@ -163,9 +163,13 @@ def replace_cached_tasks(conn: sqlite3.Connection, tasks: list[TaskRef]) -> None
     now = _now_iso()
     conn.execute("DELETE FROM cached_tasks")
     conn.executemany(
-        """INSERT INTO cached_tasks (id, name, project_name, stage_id, stage_name, write_date, fetched_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?)""",
-        [(t.id, t.name, t.project_name, t.stage_id, t.stage_name, t.write_date, now) for t in tasks],
+        """INSERT INTO cached_tasks
+           (id, name, project_name, stage_id, stage_name, write_date, create_date, fetched_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+        [
+            (t.id, t.name, t.project_name, t.stage_id, t.stage_name, t.write_date, t.create_date, now)
+            for t in tasks
+        ],
     )
     conn.commit()
 
@@ -173,12 +177,14 @@ def replace_cached_tasks(conn: sqlite3.Connection, tasks: list[TaskRef]) -> None
 @_synchronized
 def list_cached_tasks(conn: sqlite3.Connection) -> list[TaskRef]:
     rows = conn.execute(
-        f"SELECT id, name, project_name, stage_id, stage_name, write_date FROM cached_tasks {_CACHED_ORDER_SQL}"
+        "SELECT id, name, project_name, stage_id, stage_name, write_date, create_date "
+        f"FROM cached_tasks {_CACHED_ORDER_SQL}"
     ).fetchall()
     return [
         TaskRef(
             id=r["id"], name=r["name"], project_name=r["project_name"],
             stage_id=r["stage_id"], stage_name=r["stage_name"], write_date=r["write_date"],
+            create_date=r["create_date"],
         )
         for r in rows
     ]
@@ -189,9 +195,13 @@ def replace_cached_tickets(conn: sqlite3.Connection, tickets: list[TicketRef]) -
     now = _now_iso()
     conn.execute("DELETE FROM cached_tickets")
     conn.executemany(
-        """INSERT INTO cached_tickets (id, name, project_name, stage_id, stage_name, write_date, fetched_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?)""",
-        [(t.id, t.name, t.project_name, t.stage_id, t.stage_name, t.write_date, now) for t in tickets],
+        """INSERT INTO cached_tickets
+           (id, name, project_name, stage_id, stage_name, write_date, create_date, fetched_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+        [
+            (t.id, t.name, t.project_name, t.stage_id, t.stage_name, t.write_date, t.create_date, now)
+            for t in tickets
+        ],
     )
     conn.commit()
 
@@ -199,12 +209,14 @@ def replace_cached_tickets(conn: sqlite3.Connection, tickets: list[TicketRef]) -
 @_synchronized
 def list_cached_tickets(conn: sqlite3.Connection) -> list[TicketRef]:
     rows = conn.execute(
-        f"SELECT id, name, project_name, stage_id, stage_name, write_date FROM cached_tickets {_CACHED_ORDER_SQL}"
+        "SELECT id, name, project_name, stage_id, stage_name, write_date, create_date "
+        f"FROM cached_tickets {_CACHED_ORDER_SQL}"
     ).fetchall()
     return [
         TicketRef(
             id=r["id"], name=r["name"], project_name=r["project_name"],
             stage_id=r["stage_id"], stage_name=r["stage_name"], write_date=r["write_date"],
+            create_date=r["create_date"],
         )
         for r in rows
     ]

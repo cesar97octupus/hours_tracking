@@ -12,7 +12,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
 )
 
-from app import config, repository as repo
+from app import autostart, config, repository as repo
 from app.dto import EmployeeRef, FieldCapability
 from app.exceptions import (
     EmployeeNotFoundError,
@@ -47,6 +47,7 @@ def _probe_everything(url: str, db: str, username: str, password: str) -> dict:
     ctx = client.get_user_context()
     employee = client.resolve_employee(ctx.get("email"))
     helpdesk_installed = client.probe_helpdesk_installed()
+    attendance_installed = client.probe_attendance_installed()
     capability = client.probe_type_analytic_line_field()
     options = []
     if capability.present and capability.ttype == "many2one" and capability.comodel:
@@ -54,6 +55,7 @@ def _probe_everything(url: str, db: str, username: str, password: str) -> dict:
     return {
         "employee": employee,
         "helpdesk_installed": helpdesk_installed,
+        "attendance_installed": attendance_installed,
         "capability": capability,
         "options": options,
     }
@@ -166,12 +168,14 @@ class SetupWizard(QDialog):
         cfg = config.AppConfig(odoo_url=url, odoo_db=db, odoo_username=username)
         config.save_config(cfg)
         config.set_password(username, self._password)
+        autostart.set_enabled(cfg.ui.autostart_enabled)
 
         employee: EmployeeRef = self._probe_result["employee"]
         capability: FieldCapability = self._probe_result["capability"]
         repo.set_app_state(self.conn, "employee", asdict(employee))
         repo.set_app_state(self.conn, "type_analytic_capability", asdict(capability))
         repo.set_app_state(self.conn, "helpdesk_installed", {"value": self._probe_result["helpdesk_installed"]})
+        repo.set_app_state(self.conn, "attendance_installed", {"value": self._probe_result["attendance_installed"]})
         if self._probe_result["options"]:
             repo.replace_type_analytic_options(self.conn, self._probe_result["options"])
 
