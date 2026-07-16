@@ -47,6 +47,16 @@ def get_danger_color() -> str:
     return _current["danger"]
 
 
+def get_toast_colors() -> dict[str, str]:
+    """Current theme's colors for the Toast popup (app/ui/toast.py)."""
+    return {
+        "surface": _current["surface"],
+        "border": _current["primary"],
+        "text": _current["text"],
+        "text_muted": _current["text_muted"],
+    }
+
+
 def get_ring_colors() -> dict[str, str]:
     """Current theme's colors for the TimerRingWidget."""
     return {

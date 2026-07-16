@@ -2,6 +2,8 @@ from PySide6.QtCore import Signal
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QMenu, QStyle, QSystemTrayIcon, QWidget
 
+from app.ui.toast import show_toast
+
 
 class Tray(QSystemTrayIcon):
     show_window_requested = Signal()
@@ -36,4 +38,8 @@ class Tray(QSystemTrayIcon):
         self.setToolTip(f"hours_tracking — {label}" if running and label else "hours_tracking")
 
     def notify(self, title: str, message: str) -> None:
+        # Native balloon first (works in some environments); the on-screen
+        # Toast is the reliable path since Windows frequently suppresses
+        # showMessage() for apps without a registered AppUserModelID.
         self.showMessage(title, message, QSystemTrayIcon.MessageIcon.Information, 5000)
+        show_toast(title, message)
