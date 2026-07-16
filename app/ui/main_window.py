@@ -35,9 +35,6 @@ from app.ui.tray import Tray
 from app.ui.workers import run_async
 
 
-_HOURS_ALARM_THRESHOLD = 0.8  # notify if less than 80% of the daily 7h cutoff is logged by the configured time
-
-
 def _format_hms(seconds: float) -> str:
     total = int(seconds)
     h, rem = divmod(total, 3600)
@@ -436,9 +433,14 @@ class MainWindow(QMainWindow):
         today = now.date()
         current_hm = now.strftime("%H:%M")
 
+        # ">=" rather than "==": a 30s poll only overlaps the alarm's exact
+        # minute for one or two ticks, so an app that starts late, wakes from
+        # sleep, or hiccups on a tick would otherwise miss that alarm for the
+        # rest of the day. Once we've passed the configured time, fire on the
+        # next tick regardless — the per-day guard still limits it to once.
         if (
             cfg.ui.checkin_alarm_enabled
-            and cfg.ui.checkin_alarm_time == current_hm
+            and current_hm >= cfg.ui.checkin_alarm_time
             and self._checkin_notified_date != today
         ):
             self._checkin_notified_date = today
@@ -446,7 +448,7 @@ class MainWindow(QMainWindow):
 
         if (
             cfg.ui.checkout_alarm_enabled
-            and cfg.ui.checkout_alarm_time == current_hm
+            and current_hm >= cfg.ui.checkout_alarm_time
             and self._checkout_notified_date != today
         ):
             self._checkout_notified_date = today
@@ -454,24 +456,20 @@ class MainWindow(QMainWindow):
 
         if (
             cfg.ui.hours_alarm_enabled
-            and cfg.ui.hours_alarm_time == current_hm
+            and current_hm >= cfg.ui.hours_alarm_time
             and self._hours_notified_date != today
         ):
             self._hours_notified_date = today
-            self._check_hours_logged_today(today)
+            self._notify_hours_logged_today(today)
 
-    def _check_hours_logged_today(self, today: date) -> None:
-        expected_hours = MAX_TIMER_SECONDS / 3600
-        threshold = expected_hours * _HOURS_ALARM_THRESHOLD
+    def _notify_hours_logged_today(self, today: date) -> None:
         logged = sum(
             e.unit_amount for e in repo.list_entries(self.conn) if e.entry_date == today.isoformat()
         )
-        if logged < threshold:
-            self.tray.notify(
-                "hours_tracking",
-                f"Llevas {logged:.2f} h registradas hoy, por debajo del "
-                f"{int(_HOURS_ALARM_THRESHOLD * 100)}% de tu jornada ({expected_hours:.1f} h).",
-            )
+        self.tray.notify(
+            "hours_tracking",
+            f"Por favor, recuerde registrar sus horas. Ha registrado {logged:.2f} h hasta el momento.",
+        )
 
     # ---- crash recovery -------------------------------------------------
 

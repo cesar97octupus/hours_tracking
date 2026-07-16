@@ -11,9 +11,6 @@ from PySide6.QtWidgets import (
 )
 
 from app import autostart, config
-from app.timer import MAX_TIMER_SECONDS
-
-_HOURS_ALARM_THRESHOLD = 0.8
 
 
 def _time_from_str(value: str) -> QTime:
@@ -59,8 +56,6 @@ class SettingsWidget(QWidget):
         alarms_layout.addLayout(checkin_row)
         alarms_layout.addLayout(checkout_row)
 
-        expected_hours = MAX_TIMER_SECONDS / 3600
-        threshold_hours = expected_hours * _HOURS_ALARM_THRESHOLD
         self.hours_checkbox = QCheckBox("Recordar registrar horas")
         self.hours_checkbox.setChecked(ui.hours_alarm_enabled)
         self.hours_time_edit = QTimeEdit(_time_from_str(ui.hours_alarm_time))
@@ -71,10 +66,7 @@ class SettingsWidget(QWidget):
         hours_row.addWidget(self.hours_time_edit)
         hours_row.addStretch(1)
 
-        hours_hint = QLabel(
-            f"Si a esa hora no has registrado al menos el {int(_HOURS_ALARM_THRESHOLD * 100)}% de tu "
-            f"jornada ({threshold_hours:.1f} h de {expected_hours:.0f} h), te lo recordamos."
-        )
+        hours_hint = QLabel("A esa hora se te avisará cuántas horas llevas registradas hoy.")
         hours_hint.setObjectName("statusLabel")
         hours_hint.setWordWrap(True)
 
