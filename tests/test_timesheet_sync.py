@@ -4,6 +4,7 @@ import unittest
 from app import repository as repo
 from app import timesheet_sync as sync
 from app.db import _migrate
+from app.dto import EmployeeRef
 
 
 def make_conn() -> sqlite3.Connection:
@@ -93,6 +94,41 @@ class TestImportMonthFromOdoo(unittest.TestCase):
         self.assertEqual(entry.type_analytic_kind, "many2one")
         self.assertEqual(entry.type_analytic_id, 9)
         self.assertEqual(entry.type_analytic_label, "Development")
+
+
+class FakeAuthClient:
+    def __init__(self, employee, email="jane@x.com"):
+        self._employee = employee
+        self._email = email
+
+    def get_user_context(self):
+        return {"login": self._email, "email": self._email, "name": "Jane"}
+
+    def resolve_employee(self, work_email):
+        return self._employee
+
+
+class TestRevalidateEmployee(unittest.TestCase):
+    def setUp(self):
+        self.conn = make_conn()
+
+    def test_overwrites_stale_cached_employee(self):
+        repo.set_app_state(
+            self.conn, "employee",
+            {"employee_id": 1, "name": "Test", "work_email": "t@t.com", "user_id": 1},
+        )
+        client = FakeAuthClient(EmployeeRef(employee_id=51, name="Jane", work_email="jane@x.com", user_id=7))
+
+        result = sync.revalidate_employee(self.conn, client)
+
+        self.assertEqual(result.employee_id, 51)
+        cached = repo.get_app_state(self.conn, "employee")
+        self.assertEqual(cached, {"employee_id": 51, "name": "Jane", "work_email": "jane@x.com", "user_id": 7})
+
+    def test_writes_cache_even_when_nothing_was_cached_before(self):
+        client = FakeAuthClient(EmployeeRef(employee_id=51, name="Jane", work_email="jane@x.com", user_id=7))
+        sync.revalidate_employee(self.conn, client)
+        self.assertIsNotNone(repo.get_app_state(self.conn, "employee"))
 
 
 if __name__ == "__main__":

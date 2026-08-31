@@ -1,5 +1,6 @@
 import json
 import socket
+import threading
 import urllib.error
 import urllib.request
 import xmlrpc.client
@@ -44,12 +45,26 @@ class OdooClient:
         self.uid: int | None = None
         self._common = xmlrpc.client.ServerProxy(f"{self.url}/xmlrpc/2/common")
         self._models = xmlrpc.client.ServerProxy(f"{self.url}/xmlrpc/2/object")
+        # xmlrpc.client.ServerProxy keeps one persistent HTTP connection per
+        # proxy and isn't thread-safe; the UI fires several RPCs concurrently
+        # via QThreadPool (e.g. fetch_my_tasks + fetch_my_tickets), which
+        # corrupts the shared connection's state machine and surfaces as
+        # http.client.CannotSendRequest("Request-sent"). Serialize access.
+        self._models_lock = threading.Lock()
+        self._common_lock = threading.Lock()
         self._web_cookies = CookieJar()
         self._web_opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(self._web_cookies))
         self._web_session_ready = False
 
     def _execute_kw(self, model: str, method: str, args: list, kwargs: dict | None = None):
-        with _translate_errors():
+        if self.uid is None:
+            # xmlrpc.client would otherwise try to marshal a bare None as the
+            # uid positional arg and blow up with the cryptic "cannot marshal
+            # None unless allow_none is enabled" — raise something actionable
+            # instead. Reachable if the UI fires a request before authenticate()
+            # has completed (e.g. clicking "Actualizar" right after launch).
+            raise OdooConnectionError("Todavía no hay una sesión autenticada con Odoo")
+        with _translate_errors(), self._models_lock:
             return self._models.execute_kw(
                 self.db, self.uid, self.password, model, method, args, kwargs or {}
             )
@@ -57,7 +72,7 @@ class OdooClient:
     # ---- auth -------------------------------------------------------
 
     def authenticate(self) -> int:
-        with _translate_errors():
+        with _translate_errors(), self._common_lock:
             uid = self._common.authenticate(self.db, self.username, self.password, {})
         if not uid:
             raise OdooAuthError("Odoo rejected the supplied credentials")

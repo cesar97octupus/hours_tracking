@@ -22,6 +22,7 @@ from PySide6.QtWidgets import (
 )
 
 from app import config, repository as repo
+from app import timesheet_sync as sync
 from app.dto import TaskRef, TicketRef
 from app.odoo_client import OdooClient
 from app.rounding import round_up_to_quarter_hour
@@ -98,6 +99,7 @@ class MainWindow(QMainWindow):
         self.refresh_button.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_BrowserReload))
         self.refresh_button.setToolTip("Actualizar tareas/tickets")
         self.refresh_button.setFixedSize(28, 28)
+        self.refresh_button.setEnabled(False)
         self.refresh_button.clicked.connect(lambda: self._refresh_picker(live=True))
 
         self.created_after_checkbox = QCheckBox("Creadas desde:")
@@ -211,12 +213,26 @@ class MainWindow(QMainWindow):
 
     def _on_authenticated(self, _uid: int) -> None:
         self.status_label.setText("Conectado.")
+        self.refresh_button.setEnabled(True)
         self._refresh_picker(live=True)
         if self.attendance_installed:
             self._refresh_attendance_status()
+        run_async(
+            sync.revalidate_employee, self.conn, self.client,
+            on_success=self._on_employee_revalidated, on_error=self._on_employee_revalidate_error,
+        )
 
     def _on_connect_error(self, exc: Exception) -> None:
         self.status_label.setText(f"No se pudo conectar: {exc}")
+
+    def _on_employee_revalidated(self, _employee) -> None:
+        pass  # local cache already refreshed inside sync.revalidate_employee
+
+    def _on_employee_revalidate_error(self, exc: Exception) -> None:
+        # Deliberately don't touch the cached employee here: keep whatever was
+        # last known-good so exports/timer keep working off it rather than
+        # losing the cache entirely over a transient RPC hiccup.
+        self.status_label.setText(f"Conectado, pero no se pudo validar el empleado: {exc}")
 
     def _load_cached_picker(self) -> None:
         self._populate_picker(repo.list_cached_tasks(self.conn), repo.list_cached_tickets(self.conn))

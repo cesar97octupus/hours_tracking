@@ -1,5 +1,6 @@
 import calendar
 import sqlite3
+from dataclasses import asdict
 from datetime import date
 
 from app import repository as repo
@@ -27,6 +28,19 @@ def _selection_label(capability: FieldCapability, key: str | None) -> str | None
         if option_key == key:
             return label
     return key
+
+
+def revalidate_employee(conn: sqlite3.Connection, client: OdooClient) -> EmployeeRef:
+    """Re-resolves the employee against Odoo and refreshes the local cache.
+
+    Called on every successful connect (not just the initial setup wizard)
+    so a stale cached employee_id — e.g. after the employee record was
+    reassigned or recreated in Odoo — doesn't keep failing timesheet exports
+    with an opaque server-side error until someone reruns the wizard."""
+    ctx = client.get_user_context()
+    employee = client.resolve_employee(ctx.get("email"))
+    repo.set_app_state(conn, "employee", asdict(employee))
+    return employee
 
 
 def month_bounds(year: int, month: int) -> tuple[str, str]:
