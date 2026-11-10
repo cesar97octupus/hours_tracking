@@ -32,6 +32,7 @@ from app.ui.entries_list_widget import EntriesListWidget
 from app.ui.entry_dialog import EntryDialog
 from app.ui.settings_widget import SettingsWidget
 from app.ui.timer_ring import TimerRingWidget
+from app.ui.todo_widget import TodoWidget
 from app.ui.tray import Tray
 from app.ui.workers import run_async
 
@@ -183,6 +184,8 @@ class MainWindow(QMainWindow):
         self.tabs = QTabWidget()
         self.tabs.addTab(controls, "Cronómetro")
         self.tabs.addTab(self.entries_widget, "Partes de horas")
+        self.todo_widget = TodoWidget(conn)
+        self.tabs.addTab(self.todo_widget, "TODO")
         self.tabs.addTab(SettingsWidget(), "Configuración")
         self.tabs.setCornerWidget(self.attendance_corner, Qt.Corner.TopRightCorner)
         self.setCentralWidget(self.tabs)

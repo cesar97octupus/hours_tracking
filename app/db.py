@@ -4,7 +4,7 @@ from pathlib import Path
 
 import platformdirs
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 # The connection is created once on the main thread but export/sync work runs
 # on QThreadPool worker threads (see app.ui.workers.run_async), so it must
@@ -75,6 +75,57 @@ CREATE TABLE active_timer (
 );
 """
 
+_TODO_SCHEMA = """
+CREATE TABLE IF NOT EXISTS todo_categories (
+    id       INTEGER PRIMARY KEY AUTOINCREMENT,
+    name     TEXT NOT NULL UNIQUE,
+    color    TEXT NOT NULL DEFAULT '#6b7280',
+    position INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS todos (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    title         TEXT NOT NULL,
+    description   TEXT NOT NULL DEFAULT '',
+    category_id   INTEGER REFERENCES todo_categories(id) ON DELETE SET NULL,
+    priority      TEXT NOT NULL DEFAULT 'medium'
+                  CHECK (priority IN ('low','medium','high')),
+    status        TEXT NOT NULL DEFAULT 'pending'
+                  CHECK (status IN ('pending','in_progress','done','dropped')),
+    planned_date  TEXT,
+    due_date      TEXT,
+    task_id       INTEGER,
+    task_name     TEXT,
+    ticket_id     INTEGER,
+    ticket_name   TEXT,
+    created_at    TEXT NOT NULL,
+    updated_at    TEXT NOT NULL,
+    completed_at  TEXT
+);
+
+CREATE TABLE IF NOT EXISTS todo_subtasks (
+    id       INTEGER PRIMARY KEY AUTOINCREMENT,
+    todo_id  INTEGER NOT NULL REFERENCES todos(id) ON DELETE CASCADE,
+    title    TEXT NOT NULL,
+    done     INTEGER NOT NULL DEFAULT 0,
+    position INTEGER NOT NULL DEFAULT 0
+);
+"""
+
+DEFAULT_TODO_CATEGORIES = [
+    ("Investigación", "#3b82f6"),
+    ("Comunicación", "#10b981"),
+    ("Análisis", "#8b5cf6"),
+    ("Desarrollo", "#f59e0b"),
+    ("Reunión", "#ec4899"),
+    ("Revisión", "#14b8a6"),
+    ("Documentación", "#6366f1"),
+    ("Soporte", "#ef4444"),
+    ("Administrativo", "#64748b"),
+    ("Otros", "#6b7280"),
+]
+
+
 def _add_column_if_missing(conn: sqlite3.Connection, table: str, column: str, coltype: str) -> None:
     """ALTER TABLE ... ADD COLUMN is not idempotent in SQLite (no IF NOT
     EXISTS), and PRAGMA user_version can end up behind the actual schema if a
@@ -119,5 +170,13 @@ def _migrate(conn: sqlite3.Connection) -> None:
         for table in ("cached_tasks", "cached_tickets"):
             _add_column_if_missing(conn, table, "create_date", "TEXT")
         current = 3
+    if current < 4:
+        conn.executescript(_TODO_SCHEMA)
+        if conn.execute("SELECT COUNT(*) FROM todo_categories").fetchone()[0] == 0:
+            conn.executemany(
+                "INSERT INTO todo_categories (name, color, position) VALUES (?, ?, ?)",
+                [(n, c, i) for i, (n, c) in enumerate(DEFAULT_TODO_CATEGORIES)],
+            )
+        current = 4
     conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
     conn.commit()
