@@ -38,4 +38,4 @@ al inicio de cada sesión.
 
 - [x] **Gestión de categorías**: botón «Categorías…» en la pestaña TODO para renombrar, cambiar color y eliminar.
 - [x] **Recurrencia**: en el paso «Cuándo» del TODO se elige repetir (diario, laborables, semanal, mensual); al marcarlo hecho se crea la siguiente repetición.
-- [ ] **Mejoras visuales** de la pestaña TODO (anchos, tema oscuro, botones).
+- [x] **Mejoras visuales** de la pestaña TODO: checkboxes visibles en ambos temas, color de categoría como punto (texto neutro) y filtros con ancho uniforme.

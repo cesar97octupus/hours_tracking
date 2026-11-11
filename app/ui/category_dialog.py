@@ -1,7 +1,7 @@
 import sqlite3
 
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QColor, QPixmap, QIcon
+from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
     QColorDialog,
     QDialog,
@@ -16,12 +16,7 @@ from PySide6.QtWidgets import (
 )
 
 from app import todo_repository as trepo
-
-
-def _swatch(color: str) -> QIcon:
-    pm = QPixmap(14, 14)
-    pm.fill(QColor(color))
-    return QIcon(pm)
+from app.ui import theme
 
 
 class CategoryDialog(QDialog):
@@ -59,7 +54,7 @@ class CategoryDialog(QDialog):
     def _reload(self, select_id: int | None = None) -> None:
         self.list.clear()
         for c in trepo.list_categories(self.conn):
-            item = QListWidgetItem(_swatch(c.color), c.name)
+            item = QListWidgetItem(theme.color_dot_icon(c.color), c.name)
             item.setData(Qt.ItemDataRole.UserRole, c)
             self.list.addItem(item)
             if c.id == select_id:

@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (
 from app import todo_export
 from app import todo_repository as trepo
 from app.dto import Todo
+from app.ui import theme
 from app.ui.category_dialog import CategoryDialog
 from app.ui.todo_wizard import TodoWizard
 
@@ -72,8 +73,10 @@ class TodoWidget(QWidget):
         self.manage_categories_button.clicked.connect(self._manage_categories)
 
         self.category_filter = QComboBox()
+        self.category_filter.setMinimumWidth(190)
         self.category_filter.currentIndexChanged.connect(lambda _i: self.reload())
         self.status_filter = QComboBox()
+        self.status_filter.setMinimumWidth(190)
         self.status_filter.addItem("Abiertos y hechos hoy", _FILTER_OPEN)
         self.status_filter.addItem("Todos", _FILTER_ALL)
         self.status_filter.currentIndexChanged.connect(lambda _i: self.reload())
@@ -206,7 +209,7 @@ class TodoWidget(QWidget):
         item.setCheckState(0, Qt.CheckState.Checked if t.status == "done" else Qt.CheckState.Unchecked)
         item.setData(0, _ROLE, ("todo", t.id))
         if t.category_color:
-            item.setForeground(0, QBrush(QColor(t.category_color)))
+            item.setIcon(0, theme.color_dot_icon(t.category_color))
         if t.status in ("done", "dropped"):
             font = item.font(0)
             font.setStrikeOut(True)

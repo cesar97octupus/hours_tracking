@@ -1,6 +1,6 @@
 import winreg
 
-from PySide6.QtGui import QColor, QGuiApplication, QPalette
+from PySide6.QtGui import QColor, QGuiApplication, QIcon, QPalette, QPixmap
 from PySide6.QtWidgets import QApplication, QWidget
 
 _LIGHT = dict(
@@ -41,6 +41,22 @@ def get_state_colors() -> dict[str, str]:
         "synced": _current["state_synced"],
         "error": _current["state_error"],
     }
+
+
+def color_dot_icon(color: str, size: int = 12) -> QIcon:
+    """Small filled circle, used to show a category's color next to neutral text."""
+    from PySide6.QtCore import Qt
+    from PySide6.QtGui import QPainter
+
+    pm = QPixmap(size, size)
+    pm.fill(Qt.GlobalColor.transparent)
+    p = QPainter(pm)
+    p.setRenderHint(QPainter.RenderHint.Antialiasing)
+    p.setPen(Qt.PenStyle.NoPen)
+    p.setBrush(QColor(color))
+    p.drawEllipse(0, 0, size, size)
+    p.end()
+    return QIcon(pm)
 
 
 def get_danger_color() -> str:
@@ -263,6 +279,23 @@ QRadioButton::indicator:checked {{
 
 QCheckBox::indicator:checked {{
     border: 1px solid {c['primary']};
+    background: {c['primary']};
+}}
+
+QTreeWidget::indicator {{
+    width: 16px;
+    height: 16px;
+    border: 1px solid {c['text_muted']};
+    border-radius: 4px;
+    background: {c['surface']};
+}}
+
+QTreeWidget::indicator:hover {{
+    border-color: {c['primary']};
+}}
+
+QTreeWidget::indicator:checked {{
+    border-color: {c['primary']};
     background: {c['primary']};
 }}
 
