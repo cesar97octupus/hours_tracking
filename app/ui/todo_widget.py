@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (
 from app import todo_export
 from app import todo_repository as trepo
 from app.dto import Todo
+from app.ui.category_dialog import CategoryDialog
 from app.ui.todo_wizard import TodoWizard
 
 log = logging.getLogger(__name__)
@@ -66,6 +67,10 @@ class TodoWidget(QWidget):
         self.timer_button.setEnabled(False)
         self.timer_button.clicked.connect(self._start_timer_selected)
 
+        self.manage_categories_button = QPushButton("Categorías…")
+        self.manage_categories_button.setToolTip("Renombrar, cambiar color o eliminar categorías")
+        self.manage_categories_button.clicked.connect(self._manage_categories)
+
         self.category_filter = QComboBox()
         self.category_filter.currentIndexChanged.connect(lambda _i: self.reload())
         self.status_filter = QComboBox()
@@ -94,6 +99,7 @@ class TodoWidget(QWidget):
         top.addWidget(self.delete_button)
         filters = QHBoxLayout()
         filters.addWidget(self.category_filter)
+        filters.addWidget(self.manage_categories_button)
         filters.addWidget(self.status_filter)
         filters.addWidget(self.search_edit, 1)
         root = QVBoxLayout(self)
@@ -214,6 +220,11 @@ class TodoWidget(QWidget):
             sub.setData(0, _ROLE, ("sub", s.id))
 
     # ---- persistence + export
+
+    def _manage_categories(self) -> None:
+        CategoryDialog(self.conn, self).exec()
+        self._reload_categories()
+        self._changed()
 
     def refresh(self) -> None:
         self._changed()

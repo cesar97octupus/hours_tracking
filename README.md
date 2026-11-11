@@ -36,6 +36,6 @@ al inicio de cada sesión.
 
 ### Pendiente de desarrollar
 
-- [ ] **Gestión de categorías**: renombrar, cambiar color y eliminar categorías (hoy solo se crean desde el asistente).
+- [x] **Gestión de categorías**: botón «Categorías…» en la pestaña TODO para renombrar, cambiar color y eliminar.
 - [ ] **Recurrencia**: TODOs repetitivos (diarios, semanales…).
 - [ ] **Mejoras visuales** de la pestaña TODO (anchos, tema oscuro, botones).

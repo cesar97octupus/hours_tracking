@@ -98,6 +98,24 @@ class TestTodos(unittest.TestCase):
             self.assertTrue(path.exists())
             self.assertTrue((Path(d) / "2026-11-10.md").exists())
 
+    def test_update_category(self):
+        cid = trepo.create_category(self.conn, "Temp")
+        trepo.update_category(self.conn, cid, name="Renombrada", color="#112233")
+        cat = next(c for c in trepo.list_categories(self.conn) if c.id == cid)
+        self.assertEqual((cat.name, cat.color), ("Renombrada", "#112233"))
+        with self.assertRaises(ValueError):
+            trepo.update_category(self.conn, cid, name="  ")
+        with self.assertRaises(ValueError):
+            trepo.update_category(self.conn, cid, name="desarrollo")
+
+    def test_delete_category_uncategorizes_todos(self):
+        cid = trepo.create_category(self.conn, "Borrable")
+        tid = trepo.create_todo(self.conn, title="x", category_id=cid)
+        self.assertEqual(trepo.count_category_todos(self.conn, cid), 1)
+        trepo.delete_category(self.conn, cid)
+        self.assertIsNone(trepo.get_todo(self.conn, tid).category_id)
+        self.assertNotIn("Borrable", [c.name for c in trepo.list_categories(self.conn)])
+
 
 if __name__ == "__main__":
     unittest.main()

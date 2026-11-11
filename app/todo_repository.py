@@ -59,6 +59,44 @@ def create_category(conn: sqlite3.Connection, name: str, color: str = "#6b7280")
     return cur.lastrowid
 
 
+@_synchronized
+def update_category(conn: sqlite3.Connection, category_id: int, *, name: str | None = None,
+                    color: str | None = None) -> None:
+    """Rename and/or recolor a category. Raises ValueError on empty/duplicate name."""
+    sets, params = [], []
+    if name is not None:
+        name = name.strip()
+        if not name:
+            raise ValueError("El nombre no puede estar vacío.")
+        dup = conn.execute(
+            "SELECT id FROM todo_categories WHERE name = ? COLLATE NOCASE AND id != ?", (name, category_id)
+        ).fetchone()
+        if dup:
+            raise ValueError(f"Ya existe una categoría llamada «{name}».")
+        sets.append("name = ?")
+        params.append(name)
+    if color is not None:
+        sets.append("color = ?")
+        params.append(color)
+    if not sets:
+        return
+    conn.execute(f"UPDATE todo_categories SET {', '.join(sets)} WHERE id = ?", (*params, category_id))
+    conn.commit()
+
+
+@_synchronized
+def count_category_todos(conn: sqlite3.Connection, category_id: int) -> int:
+    return conn.execute("SELECT COUNT(*) FROM todos WHERE category_id = ?", (category_id,)).fetchone()[0]
+
+
+@_synchronized
+def delete_category(conn: sqlite3.Connection, category_id: int) -> None:
+    """Delete a category; its TODOs become uncategorized (ON DELETE SET NULL)."""
+    conn.execute("UPDATE todos SET category_id = NULL WHERE category_id = ?", (category_id,))
+    conn.execute("DELETE FROM todo_categories WHERE id = ?", (category_id,))
+    conn.commit()
+
+
 # ---- todos ------------------------------------------------------------
 
 def _load(conn: sqlite3.Connection, rows) -> list[Todo]:
