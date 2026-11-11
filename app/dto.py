@@ -107,6 +107,7 @@ class Todo:
     created_at: str
     updated_at: str
     completed_at: str | None
+    recurrence: str = "none"  # 'none' | 'daily' | 'weekdays' | 'weekly' | 'monthly'
     subtasks: list[TodoSubtask] = field(default_factory=list)
 
     @property

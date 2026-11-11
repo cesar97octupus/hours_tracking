@@ -193,6 +193,8 @@ class TodoWidget(QWidget):
             parts.append(f"[{t.category_name}]")
         if t.subtasks:
             parts.append(f"{t.subtasks_done}/{len(t.subtasks)}")
+        if t.recurrence != "none":
+            parts.append("↻")
         if t.status == "in_progress":
             parts.append("· en curso")
         if t.due_date:

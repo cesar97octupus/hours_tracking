@@ -37,5 +37,5 @@ al inicio de cada sesión.
 ### Pendiente de desarrollar
 
 - [x] **Gestión de categorías**: botón «Categorías…» en la pestaña TODO para renombrar, cambiar color y eliminar.
-- [ ] **Recurrencia**: TODOs repetitivos (diarios, semanales…).
+- [x] **Recurrencia**: en el paso «Cuándo» del TODO se elige repetir (diario, laborables, semanal, mensual); al marcarlo hecho se crea la siguiente repetición.
 - [ ] **Mejoras visuales** de la pestaña TODO (anchos, tema oscuro, botones).

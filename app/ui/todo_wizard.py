@@ -103,6 +103,10 @@ class TodoWizard(QDialog):
         self.due_edit.setDate(QDate.currentDate())
         self.due_edit.setEnabled(False)
         self.due_check.toggled.connect(self.due_edit.setEnabled)
+        self.recurrence_combo = QComboBox()
+        for key in trepo.RECURRENCES:
+            self.recurrence_combo.addItem(trepo.RECURRENCE_LABELS[key], key)
+        self.recurrence_combo.setToolTip("Al marcarlo como hecho se crea la siguiente repetición")
         self.link_combo = QComboBox()
         self.link_combo.setEditable(True)
         self.link_combo.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)
@@ -121,6 +125,7 @@ class TodoWizard(QDialog):
         f3.addRow("Día planificado:", self.planned_edit)
         f3.addRow(self.due_check)
         f3.addRow("Vence:", self.due_edit)
+        f3.addRow("Repetir:", self.recurrence_combo)
         f3.addRow("Vincular a Odoo:", self.link_combo)
 
         self.stack = QStackedWidget()
@@ -166,6 +171,7 @@ class TodoWizard(QDialog):
         for s in t.subtasks:
             self._append_subtask(s.title, s.done)
         self.planned_edit.setDate(_to_qdate(t.planned_date))
+        self.recurrence_combo.setCurrentIndex(max(self.recurrence_combo.findData(t.recurrence), 0))
         if t.due_date:
             self.due_check.setChecked(True)
             self.due_edit.setDate(_to_qdate(t.due_date))
@@ -231,6 +237,7 @@ class TodoWizard(QDialog):
             task_name=task[2] if task else None,
             ticket_id=ticket[1] if ticket else None,
             ticket_name=ticket[2] if ticket else None,
+            recurrence=self.recurrence_combo.currentData(),
             subtasks=subtasks,
         )
 

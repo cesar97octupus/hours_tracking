@@ -1,5 +1,6 @@
 import sqlite3
-from datetime import date, datetime
+import calendar
+from datetime import date, datetime, timedelta
 
 from app.dto import Todo, TodoCategory, TodoSubtask
 from app.repository import _now_iso, _synchronized
@@ -13,6 +14,14 @@ STATUS_LABELS = {
     "done": "Hecho",
     "dropped": "Descartado",
 }
+RECURRENCES = ("none", "daily", "weekdays", "weekly", "monthly")
+RECURRENCE_LABELS = {
+    "none": "No se repite",
+    "daily": "Cada día",
+    "weekdays": "Cada día laborable (lun-vie)",
+    "weekly": "Cada semana",
+    "monthly": "Cada mes",
+}
 PRIORITY_LABELS = {"low": "Baja", "medium": "Media", "high": "Alta"}
 
 _TODO_SELECT = """
@@ -22,12 +31,38 @@ _TODO_SELECT = """
 
 _UPDATABLE = {
     "title", "description", "category_id", "priority", "status", "planned_date",
-    "due_date", "task_id", "task_name", "ticket_id", "ticket_name",
+    "due_date", "task_id", "task_name", "ticket_id", "ticket_name", "recurrence",
 }
 
 
 def today_iso() -> str:
     return date.today().isoformat()
+
+
+def _step(d: date, recurrence: str) -> date:
+    if recurrence == "daily":
+        return d + timedelta(days=1)
+    if recurrence == "weekdays":
+        d += timedelta(days=1)
+        while d.weekday() >= 5:
+            d += timedelta(days=1)
+        return d
+    if recurrence == "weekly":
+        return d + timedelta(days=7)
+    if recurrence == "monthly":
+        year, month = (d.year + 1, 1) if d.month == 12 else (d.year, d.month + 1)
+        return date(year, month, min(d.day, calendar.monthrange(year, month)[1]))
+    raise ValueError(f"unknown recurrence: {recurrence}")
+
+
+def next_occurrence(planned: str | None, recurrence: str, today: str | None = None) -> str:
+    """First recurrence date strictly after both `planned` and today."""
+    today_d = date.fromisoformat(today or today_iso())
+    d = date.fromisoformat(planned) if planned else today_d
+    d = _step(d, recurrence)
+    while d <= today_d:
+        d = _step(d, recurrence)
+    return d.isoformat()
 
 
 def local_date_of(iso_ts: str | None) -> str | None:
@@ -135,21 +170,25 @@ def create_todo(
     task_name: str | None = None,
     ticket_id: int | None = None,
     ticket_name: str | None = None,
+    recurrence: str = "none",
     subtasks: list[tuple[str, bool]] | None = None,
 ) -> int:
     title = title.strip()
+    if recurrence not in RECURRENCES:
+        raise ValueError(f"unknown recurrence: {recurrence}")
     if not title:
         raise ValueError("title is required")
     now = _now_iso()
     cur = conn.execute(
         """INSERT INTO todos
            (title, description, category_id, priority, status, planned_date, due_date,
-            task_id, task_name, ticket_id, ticket_name, created_at, updated_at, completed_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            task_id, task_name, ticket_id, ticket_name, created_at, updated_at, completed_at,
+            recurrence)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (
             title, description, category_id, priority, status,
             planned_date or today_iso(), due_date, task_id, task_name, ticket_id, ticket_name,
-            now, now, now if status == "done" else None,
+            now, now, now if status == "done" else None, recurrence,
         ),
     )
     todo_id = cur.lastrowid
@@ -181,6 +220,9 @@ def update_todo(
     unknown = set(fields) - _UPDATABLE
     if unknown:
         raise ValueError(f"unknown todo fields: {sorted(unknown)}")
+    if fields.get("recurrence", "none") not in RECURRENCES:
+        raise ValueError(f"unknown recurrence: {fields['recurrence']}")
+    spawn_from = None
     if "status" in fields:
         current = conn.execute("SELECT status FROM todos WHERE id = ?", (todo_id,)).fetchone()
         if current is None:
@@ -188,6 +230,7 @@ def update_todo(
         if fields["status"] == "done":
             if current["status"] != "done":
                 fields["completed_at"] = _now_iso()
+                spawn_from = todo_id
         else:
             fields["completed_at"] = None
     fields["updated_at"] = _now_iso()
@@ -195,7 +238,40 @@ def update_todo(
     conn.execute(f"UPDATE todos SET {cols} WHERE id = ?", (*fields.values(), todo_id))
     if subtasks is not None:
         _replace_subtasks(conn, todo_id, subtasks)
+    if spawn_from is not None:
+        _spawn_next_occurrence(conn, spawn_from)
     conn.commit()
+
+
+def _spawn_next_occurrence(conn: sqlite3.Connection, todo_id: int) -> None:
+    """When a recurring TODO is completed, create its next occurrence (fresh
+    subtasks) and clear the recurrence on the finished one so re-toggling it
+    can't spawn duplicates."""
+    row = conn.execute("SELECT * FROM todos WHERE id = ?", (todo_id,)).fetchone()
+    if row is None or row["recurrence"] == "none":
+        return
+    planned = row["planned_date"]
+    nxt = next_occurrence(planned, row["recurrence"])
+    due = None
+    if row["due_date"]:
+        shift = date.fromisoformat(nxt) - date.fromisoformat(planned or today_iso())
+        due = (date.fromisoformat(row["due_date"]) + shift).isoformat()
+    now = _now_iso()
+    cur = conn.execute(
+        """INSERT INTO todos
+           (title, description, category_id, priority, status, planned_date, due_date,
+            task_id, task_name, ticket_id, ticket_name, created_at, updated_at, recurrence)
+           VALUES (?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        (row["title"], row["description"], row["category_id"], row["priority"], nxt, due,
+         row["task_id"], row["task_name"], row["ticket_id"], row["ticket_name"], now, now,
+         row["recurrence"]),
+    )
+    conn.execute(
+        """INSERT INTO todo_subtasks (todo_id, title, done, position)
+           SELECT ?, title, 0, position FROM todo_subtasks WHERE todo_id = ?""",
+        (cur.lastrowid, todo_id),
+    )
+    conn.execute("UPDATE todos SET recurrence = 'none' WHERE id = ?", (todo_id,))
 
 
 @_synchronized

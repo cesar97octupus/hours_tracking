@@ -4,7 +4,7 @@ from pathlib import Path
 
 import platformdirs
 
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 
 # The connection is created once on the main thread but export/sync work runs
 # on QThreadPool worker threads (see app.ui.workers.run_async), so it must
@@ -178,5 +178,8 @@ def _migrate(conn: sqlite3.Connection) -> None:
                 [(n, c, i) for i, (n, c) in enumerate(DEFAULT_TODO_CATEGORIES)],
             )
         current = 4
+    if current < 5:
+        _add_column_if_missing(conn, "todos", "recurrence", "TEXT NOT NULL DEFAULT 'none'")
+        current = 5
     conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
     conn.commit()

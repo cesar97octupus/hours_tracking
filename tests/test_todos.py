@@ -116,6 +116,41 @@ class TestTodos(unittest.TestCase):
         self.assertIsNone(trepo.get_todo(self.conn, tid).category_id)
         self.assertNotIn("Borrable", [c.name for c in trepo.list_categories(self.conn)])
 
+    def test_next_occurrence(self):
+        n = trepo.next_occurrence
+        self.assertEqual(n("2026-11-10", "daily", "2026-11-10"), "2026-11-11")
+        self.assertEqual(n("2026-11-01", "daily", "2026-11-10"), "2026-11-11")  # overdue skips to future
+        self.assertEqual(n("2026-11-13", "weekdays", "2026-11-13"), "2026-11-16")  # Fri -> Mon
+        self.assertEqual(n("2026-11-09", "weekly", "2026-11-11"), "2026-11-16")  # keeps the weekday
+        self.assertEqual(n("2026-01-31", "monthly", "2026-01-31"), "2026-02-28")  # clamps day
+
+    def test_completing_recurring_spawns_next(self):
+        tid = trepo.create_todo(
+            self.conn, title="Daily", recurrence="daily", planned_date=trepo.today_iso(),
+            due_date=trepo.today_iso(), subtasks=[("a", True), ("b", False)],
+        )
+        trepo.update_todo(self.conn, tid, status="done")
+        todos = trepo.list_todos(self.conn)
+        self.assertEqual(len(todos), 2)
+        done = next(t for t in todos if t.id == tid)
+        new = next(t for t in todos if t.id != tid)
+        self.assertEqual(done.recurrence, "none")
+        self.assertEqual((new.status, new.recurrence), ("pending", "daily"))
+        tomorrow = (date.today() + timedelta(days=1)).isoformat()
+        self.assertEqual((new.planned_date, new.due_date), (tomorrow, tomorrow))
+        self.assertEqual([(s.title, s.done) for s in new.subtasks], [("a", False), ("b", False)])
+        # re-toggling the finished one must not spawn another
+        trepo.update_todo(self.conn, tid, status="pending")
+        trepo.update_todo(self.conn, tid, status="done")
+        self.assertEqual(len(trepo.list_todos(self.conn)), 2)
+
+    def test_non_recurring_and_invalid(self):
+        tid = trepo.create_todo(self.conn, title="Once")
+        trepo.update_todo(self.conn, tid, status="done")
+        self.assertEqual(len(trepo.list_todos(self.conn)), 1)
+        with self.assertRaises(ValueError):
+            trepo.update_todo(self.conn, tid, recurrence="hourly")
+
 
 if __name__ == "__main__":
     unittest.main()
