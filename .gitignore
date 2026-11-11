@@ -48,3 +48,5 @@ todos/
 /daily_logs/2026-11-06.txt
 /daily_logs/2026-11-10.txt
 daily_logs/
+dist/
+build/
