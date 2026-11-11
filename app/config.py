@@ -1,4 +1,5 @@
 import json
+import os
 from dataclasses import asdict, dataclass, field
 
 import keyring
@@ -44,19 +45,32 @@ def load_config() -> AppConfig | None:
     path = get_config_path()
     if not path.exists():
         return None
-    data = json.loads(path.read_text(encoding="utf-8"))
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        # A crash or forced shutdown mid-write can leave a truncated/zero-filled
+        # file. Quarantine it and fall back to first-run setup instead of crashing.
+        path.replace(path.with_suffix(".json.bak"))
+        return None
     ui_data = data.get("ui", {})
-    return AppConfig(
-        odoo_url=data["odoo_url"],
-        odoo_db=data["odoo_db"],
-        odoo_username=data["odoo_username"],
-        schema_version=data.get("schema_version", SCHEMA_VERSION),
-        ui=UiPrefs(**ui_data),
-    )
+    try:
+        return AppConfig(
+            odoo_url=data["odoo_url"],
+            odoo_db=data["odoo_db"],
+            odoo_username=data["odoo_username"],
+            schema_version=data.get("schema_version", SCHEMA_VERSION),
+            ui=UiPrefs(**ui_data),
+        )
+    except KeyError:
+        path.replace(path.with_suffix(".json.bak"))
+        return None
 
 
 def save_config(cfg: AppConfig) -> None:
-    get_config_path().write_text(json.dumps(asdict(cfg), indent=2), encoding="utf-8")
+    path = get_config_path()
+    tmp_path = path.with_suffix(".json.tmp")
+    tmp_path.write_text(json.dumps(asdict(cfg), indent=2), encoding="utf-8")
+    os.replace(tmp_path, path)  # atomic on both POSIX and Windows
 
 
 def get_password(username: str) -> str | None:

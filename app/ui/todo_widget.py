@@ -1,7 +1,7 @@
 import logging
 import sqlite3
 
-from PySide6.QtCore import QTimer, Qt
+from PySide6.QtCore import QTimer, Qt, Signal
 from PySide6.QtGui import QBrush, QColor, QFont, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QComboBox,
@@ -38,6 +38,9 @@ _FILTER_OPEN, _FILTER_ALL = "open", "all"
 
 
 class TodoWidget(QWidget):
+    # Emitted with the TODO id when the user asks to run the stopwatch on it.
+    start_timer_requested = Signal(int)
+
     def __init__(self, conn: sqlite3.Connection, parent=None):
         super().__init__(parent)
         self.conn = conn
@@ -57,6 +60,11 @@ class TodoWidget(QWidget):
         self.delete_button.setToolTip("Eliminar el TODO o subtarea seleccionado (Supr)")
         self.delete_button.setEnabled(False)
         self.delete_button.clicked.connect(self._delete_selected)
+
+        self.timer_button = QPushButton("Cronómetro")
+        self.timer_button.setToolTip("Iniciar el cronómetro con la tarea/ticket de Odoo vinculado")
+        self.timer_button.setEnabled(False)
+        self.timer_button.clicked.connect(self._start_timer_selected)
 
         self.category_filter = QComboBox()
         self.category_filter.currentIndexChanged.connect(lambda _i: self.reload())
@@ -82,6 +90,7 @@ class TodoWidget(QWidget):
         top = QHBoxLayout()
         top.addWidget(self.quick_edit, 1)
         top.addWidget(self.add_button)
+        top.addWidget(self.timer_button)
         top.addWidget(self.delete_button)
         filters = QHBoxLayout()
         filters.addWidget(self.category_filter)
@@ -206,6 +215,9 @@ class TodoWidget(QWidget):
 
     # ---- persistence + export
 
+    def refresh(self) -> None:
+        self._changed()
+
     def _changed(self) -> None:
         self.reload()
         self.export()
@@ -258,6 +270,14 @@ class TodoWidget(QWidget):
         item = self.tree.currentItem()
         data = item.data(0, _ROLE) if item else None
         self.delete_button.setEnabled(isinstance(data, tuple))
+        todo_id = self._selected_todo_id(item)
+        todo = trepo.get_todo(self.conn, todo_id) if todo_id is not None else None
+        self.timer_button.setEnabled(bool(todo and todo.is_open and (todo.task_id or todo.ticket_id)))
+
+    def _start_timer_selected(self) -> None:
+        todo_id = self._selected_todo_id(self.tree.currentItem())
+        if todo_id is not None:
+            self.start_timer_requested.emit(todo_id)
 
     def _delete_selected(self) -> None:
         item = self.tree.currentItem()
@@ -305,6 +325,7 @@ class TodoWidget(QWidget):
         menu = QMenu(self)
         actions = {
             menu.addAction("Editar…"): "edit",
+            menu.addAction("Iniciar cronómetro"): "timer",
             menu.addAction("Marcar en curso"): "in_progress",
             menu.addAction("Marcar pendiente"): "pending",
             menu.addAction("Marcar hecho"): "done",
@@ -322,6 +343,9 @@ class TodoWidget(QWidget):
             return
         if chosen == "delete":
             self._delete_selected()
+            return
+        if chosen == "timer":
+            self.start_timer_requested.emit(todo_id)
             return
         elif chosen == "today":
             trepo.update_todo(self.conn, todo_id, planned_date=trepo.today_iso())

@@ -16,6 +16,10 @@ def get_export_dir() -> Path:
     if override:
         return Path(override)
     if getattr(sys, "frozen", False):
+        # The packaged exe lives in <project>/dist/; keep the file in the project.
+        project = Path(sys.executable).resolve().parent.parent
+        if (project / "hours_tracking.spec").exists():
+            return project / "todos"
         return get_app_dir() / "todos"
     return Path(__file__).resolve().parent.parent / "todos"
 

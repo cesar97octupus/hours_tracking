@@ -23,6 +23,7 @@ from PySide6.QtWidgets import (
 
 from app import config, repository as repo
 from app import timesheet_sync as sync
+from app import todo_repository as trepo
 from app.dto import TaskRef, TicketRef
 from app.odoo_client import OdooClient
 from app.rounding import round_up_to_quarter_hour
@@ -186,6 +187,7 @@ class MainWindow(QMainWindow):
         self.tabs.addTab(self.entries_widget, "Partes de horas")
         self.todo_widget = TodoWidget(conn)
         self.tabs.addTab(self.todo_widget, "TODO")
+        self.todo_widget.start_timer_requested.connect(self._start_timer_for_todo)
         self.tabs.addTab(SettingsWidget(), "Configuración")
         self.tabs.setCornerWidget(self.attendance_corner, Qt.Corner.TopRightCorner)
         self.setCentralWidget(self.tabs)
@@ -383,6 +385,37 @@ class MainWindow(QMainWindow):
         start_and_persist(self.conn, self.timer)
         self.tick_timer.start()
         self._set_running_ui(True)
+
+    def _start_timer_for_todo(self, todo_id: int) -> None:
+        todo = trepo.get_todo(self.conn, todo_id)
+        if todo is None:
+            return
+        if self.timer is not None:
+            QMessageBox.warning(self, "Cronómetro en marcha", "Detén el cronómetro actual antes de iniciar otro.")
+            return
+        if not (todo.task_id or todo.ticket_id):
+            QMessageBox.warning(
+                self, "TODO sin vínculo", "Edita el TODO y vincúlalo a una tarea o ticket de Odoo para usar el cronómetro."
+            )
+            return
+        is_task = bool(todo.task_id)
+        item_id = todo.task_id if is_task else todo.ticket_id
+        label = f"#{item_id} {todo.task_name if is_task else todo.ticket_name}"
+        self.description_edit.setText(todo.title)
+        self.timer = Timer(
+            description=todo.title,
+            task_id=item_id if is_task else None,
+            task_name=label if is_task else None,
+            ticket_id=item_id if not is_task else None,
+            ticket_name=label if not is_task else None,
+        )
+        start_and_persist(self.conn, self.timer)
+        if todo.status == "pending":
+            trepo.update_todo(self.conn, todo.id, status="in_progress")
+            self.todo_widget.refresh()
+        self.tick_timer.start()
+        self._set_running_ui(True)
+        self.tabs.setCurrentIndex(0)
 
     def _stop_timer(self, *, auto: bool = False) -> None:
         if self.timer is None:
